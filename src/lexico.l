@@ -2,14 +2,24 @@
 #include <string>
 %}
 
-SPACE [ \t]
-DIGIT [0-9]
-LETTER [A-Za-z]
-UNDERSCORE _
+%option noyywrap
 
-NUMBER ({DIGIT})+
+ESPACO [ \t]
+DIGITO [0-9]
 
+DELIM {ESPACO}+
+NUM {DIGITO}+
 
 %%
+
+"\n"		{ linha++; }
+
+{DELIM} 	{}
+
+[+]			{ return *yytext; }
+
+{NUM}		{ yylval.label = yytext; return TK_NUM; }
+
+.			{ fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
 %%
