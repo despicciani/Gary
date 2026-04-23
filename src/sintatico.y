@@ -25,7 +25,8 @@ string gentempcode();
 
 %start S
 
-%left '+'
+%left '+' '-'
+%left '*' '/'
 
 %%
 
@@ -47,6 +48,24 @@ E 			: E '+' E
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " + " + $3.label + ";\n";
+			}
+			| E '-' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
+					" = " + $1.label + " - " + $3.label + ";\n";	
+			}
+			| E '*' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " * " + $3.label + ";\n";
+			}
+			| E '/' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " / " + $3.label + ";\n";	
 			}
 			| TK_NUM
 			{
