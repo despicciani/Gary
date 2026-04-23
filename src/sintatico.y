@@ -23,8 +23,16 @@ string gentempcode();
 
 %token TK_NUM
 
+// Tokens Relacionais
+%token TK_MaI TK_MeI TK_IG TK_DF
+
+// Tokens 
+
 %start S
 
+
+%left TK_IG TK_DF
+%left '>' '<' TK_MaI TK_MeI 
 %left '+' '-'
 %left '*' '/'
 
@@ -67,6 +75,42 @@ E 			: E '+' E
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " / " + $3.label + ";\n";	
 			}
+			| E '>' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " > " + $3.label + ";\n";		
+			}
+			| E '<' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " < " + $3.label + ";\n";		
+			}
+			| E TK_MaI E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " >= " + $3.label + ";\n";		
+			}
+			| E TK_MeI E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " <= " + $3.label + ";\n";		
+			}
+			| E TK_IG E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " == " + $3.label + ";\n";		
+			}
+			| E TK_DF E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " != " + $3.label + ";\n";		
+			}
 			| TK_NUM
 			{
 				$$.label = gentempcode();
@@ -80,14 +124,12 @@ E 			: E '+' E
 
 int yyparse();
 
-string gentempcode()
-{
+string gentempcode() {
 	var_temp_qnt++;
 	return "t" + to_string(var_temp_qnt);
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 	var_temp_qnt = 0;
 
 	if (yyparse() == 0)
@@ -96,7 +138,6 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void yyerror(string MSG)
-{
+void yyerror(string MSG) {
 	cerr << "Erro na linha " << linha << ": " << MSG << endl;
 }

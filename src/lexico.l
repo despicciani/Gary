@@ -12,14 +12,27 @@ NUM {DIGITO}+
 
 %%
 
-"\n"		{ linha++; }
+"\n"		        { linha++; }
 
-{DELIM} 	{}
+{DELIM} 	        {}
 
-[-+*/]		{ return *yytext; }
 
-{NUM}		{ yylval.label = yytext; return TK_NUM; }
+    /* Operadores Aritméticos */
+"+"		            { return '+'; }
+"-"		            { return '-'; }
+"*"		            { return '*'; }
+"/"		            { return '/'; }
 
-.			{ fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
+    /* Operadores Relacionais */
+">="                { return TK_MaI; }
+"<="                { return TK_MeI; }
+"=="                { return TK_IG;  }
+"!="                { return TK_DF;  }
+">"                 { return '>';    }
+"<"                 { return '<';    }
+
+{NUM}		        { yylval.label = yytext; return TK_NUM; }
+
+.			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
 %%
