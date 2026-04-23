@@ -1,7 +1,9 @@
+SHELL := /bin/bash
+DIR := src
 SCANNER := flex
-SCANNER_PARAMS := lexico.l
+SCANNER_PARAMS := $(DIR)/lexico.l
 PARSER := bison
-PARSER_PARAMS := -d --yacc sintatico.y
+PARSER_PARAMS := -d --yacc $(DIR)/sintatico.y
 CXXFLAGS := -Wno-free-nonheap-object
 FILE := exemplos/01_soma.foca
 
@@ -12,10 +14,10 @@ compile: glf
 glf: y.tab.c lex.yy.c
 		g++ $(CXXFLAGS) -o glf y.tab.c
 
-lex.yy.c: lexico.l
+lex.yy.c: $(DIR)/lexico.l
 		$(SCANNER) $(SCANNER_PARAMS)
 
-y.tab.c y.tab.h: sintatico.y
+y.tab.c y.tab.h: $(DIR)/sintatico.y
 		$(PARSER) $(PARSER_PARAMS)
 
 translate: glf
