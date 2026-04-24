@@ -37,6 +37,10 @@ NUM {DIGITO}+
 "||"                { return TK_OR;  }
 "!"                 { return '!';    } 
 
+    /*       Parênteses       */
+"("                 { return '('; }
+")"                 { return ')'; }
+
 {NUM}		        { yylval.label = yytext; return TK_NUM; }
 
 .			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }

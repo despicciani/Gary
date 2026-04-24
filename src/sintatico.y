@@ -81,7 +81,6 @@ E 			: E '+' E
 			}
 
 	/* 	Operadores Relacionais	*/	
-
 			| E '>' E
 			{
 				$$.label = gentempcode();
@@ -139,6 +138,12 @@ E 			: E '+' E
 					"!" + $2.label + ";\n";
 			}
 
+	/*        Parênteses		*/
+			| '(' E ')'
+			{
+				$$.label = $2.label;
+				$$.traducao = $2.traducao;
+			}
 	/* 	       Números		    */
 			| TK_NUM
 			{
