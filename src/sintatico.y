@@ -47,7 +47,11 @@ S 			: E
 								"#include <stdio.h>\n"
 								"int main(void) {\n";
 
-				codigo_gerado += $1.traducao;
+				for (int i = 0; i < var_temp_qnt; i++) {
+					codigo_gerado += "\tint t" + std::to_string(i + 1) + ";\n";
+				}
+
+				codigo_gerado += "\n" + $1.traducao;
 
 				codigo_gerado += "\treturn 0;"
 							"\n}\n";
