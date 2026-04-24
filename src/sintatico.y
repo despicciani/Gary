@@ -24,20 +24,23 @@ string gentempcode();
 %token TK_NUM
 
 // Tokens Relacionais
-%token TK_MaI TK_MeI TK_IG TK_DF
+%token TK_GE TK_LE TK_EQ TK_DIF
 
-// Tokens 
+// Tokens Lógicos
+%token TK_AND TK_OR
 
 %start S
 
-
-%left TK_IG TK_DF
-%left '>' '<' TK_MaI TK_MeI 
+%left TK_OR
+%left TK_AND
+%left TK_EQ TK_DIF
+%left '>' '<' TK_GE TK_LE 
 %left '+' '-'
 %left '*' '/'
+%right '!'
 
 %%
-
+	/* 		   Início			*/
 S 			: E
 			{
 				codigo_gerado = "/*Compilador FOCA*/\n"
@@ -51,6 +54,7 @@ S 			: E
 			}
 			;
 
+	/* 	Operadores Aritméticos	*/
 E 			: E '+' E
 			{
 				$$.label = gentempcode();
@@ -75,6 +79,9 @@ E 			: E '+' E
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " / " + $3.label + ";\n";	
 			}
+
+	/* 	Operadores Relacionais	*/	
+
 			| E '>' E
 			{
 				$$.label = gentempcode();
@@ -87,30 +94,52 @@ E 			: E '+' E
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " < " + $3.label + ";\n";		
 			}
-			| E TK_MaI E
+			| E TK_GE E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " >= " + $3.label + ";\n";		
 			}
-			| E TK_MeI E
+			| E TK_LE E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " <= " + $3.label + ";\n";		
 			}
-			| E TK_IG E
+			| E TK_EQ E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " == " + $3.label + ";\n";		
 			}
-			| E TK_DF E
+			| E TK_DIF E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " != " + $3.label + ";\n";		
 			}
+
+	/* 	  Operadores Lógicos    */			
+			| E TK_AND E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " && " + $3.label + ";\n";		
+			}
+			| E TK_OR E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
+					" = " + $1.label + " || " + $3.label + ";\n";		
+			}
+			| '!' E
+			{
+				$$.label = gentempcode();
+				$$.traducao = $2.traducao + "\t" + $$.label + " = " + 
+					"!" + $2.label + ";\n";
+			}
+
+	/* 	       Números		    */
 			| TK_NUM
 			{
 				$$.label = gentempcode();

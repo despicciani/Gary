@@ -24,12 +24,18 @@ NUM {DIGITO}+
 "/"		            { return '/'; }
 
     /* Operadores Relacionais */
-">="                { return TK_MaI; }
-"<="                { return TK_MeI; }
-"=="                { return TK_IG;  }
-"!="                { return TK_DF;  }
-">"                 { return '>';    }
-"<"                 { return '<';    }
+">="                { return TK_GE;   } 
+"<="                { return TK_LE;   }
+"=="                { return TK_EQ;   }
+"!="                { return TK_DIF;  }
+">"                 { return '>';     }
+"<"                 { return '<';     }
+
+    /*  Operadores Lógicos    */
+
+"&&"                { return TK_AND; }
+"||"                { return TK_OR;  }
+"!"                 { return '!';    } 
 
 {NUM}		        { yylval.label = yytext; return TK_NUM; }
 
