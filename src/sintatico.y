@@ -14,6 +14,7 @@ struct atributos
 {
 	string label;
 	string traducao;
+	string tipo;
 };
 
 int yylex(void);
@@ -22,6 +23,14 @@ string gentempcode();
 %}
 
 %token TK_NUM
+%token TK_FLOAT
+%token TK_CHAR
+%token TK_BOOL
+
+%token TK_TIPO_INT
+%token TK_TIPO_FLOAT
+%token TK_TIPO_CHAR
+%token TK_TIPO_BOOL
 
 %start S
 
@@ -42,18 +51,55 @@ S 			: E
 			}
 			;
 
-E 			: E '+' E
+E 			: TK_NUM
+
+			{
+			$$.label = gentempcode();
+			$$.tipo = "int";
+			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+			}
+			
+			| TK_FLOAT
+			{
+			$$.label = gentempcode();
+			$$.tipo = "float";
+			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+			}
+
+			| TK_CHAR
+			{
+			$$.label = gentempcode();
+			$$.tipo = "char";
+			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+			}
+			
+
+			| TK_BOOL
+			{
+			$$.label = gentempcode();
+			$$.tipo = "boolean";
+			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+			}
+			
+ 			| E '+' E
 			{
 				$$.label = gentempcode();
+
+				if ($1.tipo != $3.tipo) {
+					string erro = "tipos incompativeis na soma (" + $1.tipo + " + " + $3.tipo + ")";
+					yyerror(erro);
+					
+					$$.tipo = "erro"; 
+				} else {
+					$$.tipo = $1.tipo;
+				}
+
+
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = " + $1.label + " + " + $3.label + ";\n";
 			}
-			| TK_NUM
-			{
-				$$.label = gentempcode();
-				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
-			}
 			;
+			
 
 %%
 
