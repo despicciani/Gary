@@ -71,7 +71,7 @@ S 			: BLOCO
 			}
 			;
 
-BLOCO		: CMD BLOCO
+BLOCO		: BLOCO CMD
 			{
 				$$.traducao = $1.traducao + $2.traducao;
 			}
