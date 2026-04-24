@@ -11,10 +11,12 @@ DIGITO [0-9]
 DELIM {ESPACO}+
 NUM {DIGITO}+
 FLOAT {DIGITO}+\.{DIGITO}+
+ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %%
 
 "\n"		{ linha++; }
+"\r"        {}
 
 {DELIM} 	{}
 
@@ -26,6 +28,8 @@ FLOAT {DIGITO}+\.{DIGITO}+
 
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
 {NUM}		{ yylval.label = yytext; return TK_NUM; }
+{ID}        { yylval.label = yytext; return TK_ID; }
+[=;]		{ return *yytext; }
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
 
 [+]			{ return *yytext; }
