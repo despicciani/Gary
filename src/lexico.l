@@ -1,5 +1,6 @@
 %{
 #include <string>
+#include "y.tab.h"
 %}
 
 %option noyywrap
@@ -8,7 +9,9 @@ ESPACO [ \t]
 DIGITO [0-9]
 
 DELIM {ESPACO}+
-NUM {DIGITO}+
+INT {DIGITO}+
+FLOAT {DIGITO}+\.{DIGITO}+
+ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %%
 
@@ -17,13 +20,31 @@ NUM {DIGITO}+
 {DELIM} 	        {}
 
 
-    /* Operadores Aritméticos */
+    /*          Tipos          */
+"int"       { return TK_TIPO_INT;   }
+"float"     { return TK_TIPO_FLOAT; }
+"char"      { return TK_TIPO_CHAR;  }
+"bool"      { return TK_TIPO_BOOL;  }
+"true"|"false" { yylval.label = yytext; return TK_BOOL; }
+
+    /* Números e Identificador */
+{FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
+{INT}		{ yylval.label = yytext; return TK_INT; }
+{ID}        { yylval.label = yytext; return TK_ID; }
+
+    /*          Char           */
+'[^']'      { yylval.label = yytext; return TK_CHAR; }
+
+    /*   Atribuição e ;        */
+[=;]		{ return *yytext; }
+
+    /* Operadores Aritméticos  */
 "+"		            { return '+'; }
 "-"		            { return '-'; }
 "*"		            { return '*'; }
 "/"		            { return '/'; }
 
-    /* Operadores Relacionais */
+    /* Operadores Relacionais  */
 ">="                { return TK_GE;   } 
 "<="                { return TK_LE;   }
 "=="                { return TK_EQ;   }
@@ -31,17 +52,15 @@ NUM {DIGITO}+
 ">"                 { return '>';     }
 "<"                 { return '<';     }
 
-    /*  Operadores Lógicos    */
+    /*  Operadores Lógicos     */
 
 "&&"                { return TK_AND; }
 "||"                { return TK_OR;  }
 "!"                 { return '!';    } 
 
-    /*       Parênteses       */
+    /*       Parênteses        */
 "("                 { return '('; }
 ")"                 { return ')'; }
-
-{NUM}		        { yylval.label = yytext; return TK_NUM; }
 
 .			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
