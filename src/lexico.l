@@ -9,31 +9,59 @@ ESPACO [ \t]
 DIGITO [0-9]
 
 DELIM {ESPACO}+
-NUM {DIGITO}+
+INT {DIGITO}+
 FLOAT {DIGITO}+\.{DIGITO}+
 ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %%
 
-"\n"		{ linha++; }
-"\r"        {}
+"\n"		        { linha++; }
 
-{DELIM} 	{}
+{DELIM} 	        {}
 
-"int"       { return TK_TIPO_INT; }
+
+    /*          Tipos          */
+"int"       { return TK_TIPO_INT;   }
 "float"     { return TK_TIPO_FLOAT; }
-"char"      { return TK_TIPO_CHAR; }
-"boolean"   { return TK_TIPO_BOOL; }
+"char"      { return TK_TIPO_CHAR;  }
+"bool"      { return TK_TIPO_BOOL;  }
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
 
+    /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
-{NUM}		{ yylval.label = yytext; return TK_NUM; }
+{INT}		{ yylval.label = yytext; return TK_INT; }
 {ID}        { yylval.label = yytext; return TK_ID; }
-[=;]		{ return *yytext; }
+
+    /*          Char           */
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
 
-[+]			{ return *yytext; }
+    /*   Atribuição e ;        */
+[=;]		{ return *yytext; }
 
-.			{ fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
+    /* Operadores Aritméticos  */
+"+"		            { return '+'; }
+"-"		            { return '-'; }
+"*"		            { return '*'; }
+"/"		            { return '/'; }
+
+    /* Operadores Relacionais  */
+">="                { return TK_GE;   } 
+"<="                { return TK_LE;   }
+"=="                { return TK_EQ;   }
+"!="                { return TK_DIF;  }
+">"                 { return '>';     }
+"<"                 { return '<';     }
+
+    /*  Operadores Lógicos     */
+
+"&&"                { return TK_AND; }
+"||"                { return TK_OR;  }
+"!"                 { return '!';    } 
+
+    /*       Parênteses        */
+"("                 { return '('; }
+")"                 { return ')'; }
+
+.			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
 %%
