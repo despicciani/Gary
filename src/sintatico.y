@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 #include <unordered_map>
 
 #define YYSTYPE atributos
@@ -12,6 +13,29 @@ int var_temp_qnt;
 int linha = 1;
 string codigo_gerado;
 vector<string> tipos_dos_temporarios;
+
+map<string, int> tipo_para_id = {
+    {"int",   0},
+    {"float", 1},
+    {"char",  2},
+    {"bool",  3}
+};
+
+string matriz_conversao_implicita[4][4] = {
+    //          int       float      char      bool
+    /*int*/   {"int",   "float",   "int",      "int"},
+    /*float*/ {"float", "float",   "float",  "float"},
+    /*char*/  {"int",   "float",   "char",     "int"},
+    /*bool*/  {"int",   "float",   "int",     "bool"}
+};
+
+string matriz_atribuicao[4][4] = {
+	//          int       float      char      bool
+    /*int*/   {"int",     "int",    "int",    "int"},
+    /*float*/ {"float", "float",   "erro",  "float"},
+    /*char*/  {"erro",    "erro",   "char",   "erro"},
+    /*bool*/  {"bool",   "bool",   "erro",   "bool"}
+};
 
 struct atributos
 {
@@ -32,7 +56,8 @@ void yyerror(string);
 string gentempcode(string tipo);
 void declarar_variavel(string nome, string tipo);
 Simbolo buscar_simbolo(string nome);
-
+string obter_tipo_resultante(string t1, string t2) { return matriz_conversao_implicita[tipo_para_id[t1]][tipo_para_id[t2]]; } 
+string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[tipo_para_id[t1]][tipo_para_id[t2]]; } 
 %}
 
 // Literais
@@ -118,12 +143,24 @@ CMD			: TIPO TK_ID ';' // Regra de DECLARAÇÃO
 			{
 				Simbolo s = buscar_simbolo($1.label);
 				
+				string tipo_resultante = obter_tipo_atribuicao($1.tipo, $3.tipo);
+				string linha_conversao = "";
+
+				string label_expressao = $3.label;
+
 				if (s.tipo != $3.tipo) {
-					yyerror("Atribuicao invalida: '" + $1.label + "' (" + s.tipo + ") nao pode receber tipo '" + $3.tipo + "'.");
-					exit(1);
+					if (tipo_resultante == "erro") {
+						yyerror("Atribuicao invalida: '" + $1.label + "' (" + s.tipo + ") nao pode receber tipo '" + $3.tipo + "'.");
+						exit(1);
+					}
+					else {
+						label_expressao = gentempcode(tipo_resultante);
+						linha_conversao = "\t" + label_expressao + " = (" + tipo_resultante + ") "  +
+							$3.label + ";\n";
+					}
 				}
 
-				$$.traducao = $3.traducao + "\t" + s.label + " = " + $3.label + ";\n";
+				$$.traducao = $3.traducao + linha_conversao +"\t" + s.label + " = " + label_expressao + ";\n";
 			}
 			| E ';' 
             {
@@ -174,34 +211,106 @@ E 			: TK_ID
 	/* 	Operadores Aritméticos	*/ 
 			| E '+' E
 			{
-				$$.label = gentempcode($1.tipo);
-				$$.tipo = $1.tipo;
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
-					" = " + $1.label + " + " + $3.label + ";\n";
+				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+				string linha_conversao = "";
+
+				string operando1 = $1.label;
+				string operando2 = $3.label;
+
+				// Lógica de Conversão Implícita
+				if ($1.tipo != tipo_resultante) {
+					operando1 = gentempcode(tipo_resultante); 
+					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
+						$1.label + ";\n";
+				}
+				if ($3.tipo != tipo_resultante) {
+					operando2 = gentempcode(tipo_resultante);
+					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
+						$3.label + ";\n";
+				}
+
+				$$.label = gentempcode(tipo_resultante);
+				$$.tipo = tipo_resultante;
+				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
+					"\t" + $$.label + " = " + operando1 + " + " + operando2 + ";\n";
 			}
 
 			| E '-' E
 			{
-				$$.label = gentempcode($1.tipo);
-				$$.tipo = $1.tipo;
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
-					" = " + $1.label + " - " + $3.label + ";\n";	
+				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+				string linha_conversao = "";
+
+				string operando1 = $1.label;
+				string operando2 = $3.label;
+
+				// Lógica de Conversão Implícita
+				if ($1.tipo != tipo_resultante) {
+					operando1 = gentempcode(tipo_resultante); 
+					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
+						$1.label + ";\n";
+				}
+				if ($3.tipo != tipo_resultante) {
+					operando2 = gentempcode(tipo_resultante);
+					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
+						$3.label + ";\n";
+				}
+
+				$$.label = gentempcode(tipo_resultante);
+				$$.tipo = tipo_resultante;
+				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
+					"\t" + $$.label + " = " + operando1 + " - " + operando2 + ";\n";
 			}
 
 			| E '*' E
 			{
-				$$.label = gentempcode($1.tipo);
-				$$.tipo = $1.tipo;
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
-					" = " + $1.label + " * " + $3.label + ";\n";
+				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+				string linha_conversao = "";
+
+				string operando1 = $1.label;
+				string operando2 = $3.label;
+
+				// Lógica de Conversão Implícita
+				if ($1.tipo != tipo_resultante) {
+					operando1 = gentempcode(tipo_resultante); 
+					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
+						$1.label + ";\n";
+				}
+				if ($3.tipo != tipo_resultante) {
+					operando2 = gentempcode(tipo_resultante);
+					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
+						$3.label + ";\n";
+				}
+
+				$$.label = gentempcode(tipo_resultante);
+				$$.tipo = tipo_resultante;
+				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
+					"\t" + $$.label + " = " + operando1 + " * " + operando2 + ";\n";
 			}
 
 			| E '/' E
 			{
-				$$.label = gentempcode($1.tipo);
-				$$.tipo = $1.tipo;
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
-					" = " + $1.label + " / " + $3.label + ";\n";	
+				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+				string linha_conversao = "";
+
+				string operando1 = $1.label;
+				string operando2 = $3.label;
+
+				// Lógica de Conversão Implícita
+				if ($1.tipo != tipo_resultante) {
+					operando1 = gentempcode(tipo_resultante); 
+					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
+						$1.label + ";\n";
+				}
+				if ($3.tipo != tipo_resultante) {
+					operando2 = gentempcode(tipo_resultante);
+					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
+						$3.label + ";\n";
+				}
+
+				$$.label = gentempcode(tipo_resultante);
+				$$.tipo = tipo_resultante;
+				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
+					"\t" + $$.label + " = " + operando1 + " / " + operando2 + ";\n";	
 			}
 
 	/* 	Operadores Relacionais	*/ 
