@@ -92,6 +92,7 @@ string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[ti
 %left '+' '-'
 %left '*' '/'
 %right '!'
+%right CAST
 
 %%
 	/* 		   Início			*/
@@ -395,6 +396,15 @@ E 			: TK_ID
 				$$.traducao = $2.traducao;
 			}
 			;
+
+	/*        Conversão Explícita (Cast)    */ 
+			| '(' TIPO ')' E %prec CAST
+			{
+				$$.tipo = $2.tipo;
+				$$.label = gentempcode($2.tipo);
+				string instrucao_cast = "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
+				$$.traducao = $4.traducao + instrucao_cast;
+			}
 
 %%
 
