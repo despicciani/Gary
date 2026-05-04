@@ -23,18 +23,18 @@ map<string, int> tipo_para_id = {
 
 string matriz_conversao_implicita[4][4] = {
     //          int       float      char      bool
-    /*int*/   {"int",   "float",   "int",      "int"},
-    /*float*/ {"float", "float",   "float",  "float"},
-    /*char*/  {"int",   "float",   "char",     "int"},
-    /*bool*/  {"int",   "float",   "int",     "bool"}
+    /*int*/   {"int",   "float",   "erro",      "erro"},
+    /*float*/ {"float", "float",   "erro",  	"erro"},
+    /*char*/  {"erro",   "erro",   "erro",      "erro"},
+    /*bool*/  {"erro",   "erro",   "erro",      "erro"}
 };
 
 string matriz_atribuicao[4][4] = {
 	//          int       float      char      bool
-    /*int*/   {"int",     "int",    "int",    "int"},
-    /*float*/ {"float", "float",   "erro",  "float"},
-    /*char*/  {"erro",    "erro",   "char",   "erro"},
-    /*bool*/  {"bool",   "bool",   "erro",   "bool"}
+    /*int*/   {"int",    "erro",  "erro",    "erro"},
+    /*float*/ {"float", "float",   "erro",   "erro"},
+    /*char*/  {"erro",   "erro",   "char",   "erro"},
+    /*bool*/  {"erro",   "erro",   "erro",   "bool"}
 };
 
 struct atributos
@@ -213,6 +213,12 @@ E 			: TK_ID
 			| E '+' E
 			{
 				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+
+				if (tipo_resultante == "erro") {
+					yyerror("Operacao invalida: nao e possivel somar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
+					exit(1);
+				}
+
 				string linha_conversao = "";
 
 				string operando1 = $1.label;
@@ -239,6 +245,12 @@ E 			: TK_ID
 			| E '-' E
 			{
 				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+
+				if (tipo_resultante == "erro") {
+					yyerror("Operacao invalida: nao e possivel subtrair tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
+					exit(1);
+				}
+
 				string linha_conversao = "";
 
 				string operando1 = $1.label;
@@ -265,6 +277,12 @@ E 			: TK_ID
 			| E '*' E
 			{
 				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+
+				if (tipo_resultante == "erro") {
+					yyerror("Operacao invalida: nao e possivel multiplicar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
+					exit(1);
+				}
+
 				string linha_conversao = "";
 
 				string operando1 = $1.label;
@@ -291,6 +309,12 @@ E 			: TK_ID
 			| E '/' E
 			{
 				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
+
+				if (tipo_resultante == "erro") {
+					yyerror("Operacao invalida: nao e possivel dividir tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
+					exit(1);
+				}
+
 				string linha_conversao = "";
 
 				string operando1 = $1.label;
@@ -395,7 +419,6 @@ E 			: TK_ID
 				$$.tipo = $2.tipo;
 				$$.traducao = $2.traducao;
 			}
-			;
 
 	/*        Conversão Explícita (Cast)    */ 
 			| '(' TIPO ')' E %prec CAST
@@ -405,6 +428,7 @@ E 			: TK_ID
 				string instrucao_cast = "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
 				$$.traducao = $4.traducao + instrucao_cast;
 			}
+			;
 
 %%
 
