@@ -21,11 +21,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 
     /*          Tipos          */
-"int"       { return TK_TIPO_INT;   }
-"float"     { return TK_TIPO_FLOAT; }
-"char"      { return TK_TIPO_CHAR;  }
-"bool"      { return TK_TIPO_BOOL;  }
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
+
+"print"     { return TK_PRINT; }
 
     /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }

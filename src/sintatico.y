@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <map>
 #include <unordered_map>
 
 #define YYSTYPE atributos
@@ -12,52 +11,148 @@ using namespace std;
 int var_temp_qnt;
 int linha = 1;
 string codigo_gerado;
-vector<string> tipos_dos_temporarios;
 
-map<string, int> tipo_para_id = {
-    {"int",   0},
-    {"float", 1},
-    {"char",  2},
-    {"bool",  3}
-};
+vector<string> variaveis_declaradas;
+unordered_map<string, bool> tabela_simbolos;
 
-string matriz_conversao_implicita[4][4] = {
-    //          int       float      char      bool
-    /*int*/   {"int",   "float",   "erro",      "erro"},
-    /*float*/ {"float", "float",   "erro",  	"erro"},
-    /*char*/  {"erro",   "erro",   "erro",      "erro"},
-    /*bool*/  {"erro",   "erro",   "erro",      "erro"}
-};
-
-string matriz_atribuicao[4][4] = {
-	//          int       float      char      bool
-    /*int*/   {"int",     "int",   "erro",   "erro"},
-    /*float*/ {"float", "float",   "erro",   "erro"},
-    /*char*/  {"erro",   "erro",   "char",   "erro"},
-    /*bool*/  {"erro",   "erro",   "erro",   "bool"}
-};
-
-struct atributos
-{
+struct atributos {
 	string label;
 	string traducao;
-	string tipo;
 };
-
-struct Simbolo {
-	string tipo;
-    string label;
-};
-
-unordered_map<string, Simbolo> tabela_simbolos;
 
 int yylex(void);
 void yyerror(string);
-string gentempcode(string tipo);
-void declarar_variavel(string nome, string tipo);
-Simbolo buscar_simbolo(string nome);
-string obter_tipo_resultante(string t1, string t2) { return matriz_conversao_implicita[tipo_para_id[t1]][tipo_para_id[t2]]; } 
-string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[tipo_para_id[t1]][tipo_para_id[t2]]; } 
+
+string gentempcode() {
+	var_temp_qnt++;
+	return "t" + to_string(var_temp_qnt);
+}
+
+void registrar_variavel(string nome) {
+	if (!tabela_simbolos.count(nome)) {
+		tabela_simbolos[nome] = true;
+		variaveis_declaradas.push_back(nome);
+	}
+}
+
+//codigo c q vai no final
+string runtime_c = 
+"/* Compilador Dinamico FOCA */\n"
+"#include <stdio.h>\n"
+"#include <stdlib.h>\n"
+"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL } TipoVar;\n"
+"typedef struct {\n"
+"    TipoVar tipo;\n"
+"    union {\n"
+"        int v_int;\n"
+"        float v_float;\n"
+"        char v_char;\n"
+"        int v_bool;\n"
+"    } valor;\n"
+"} Var;\n"
+"Var cria_int(int v) { Var res; res.tipo = TIPO_INT; res.valor.v_int = v; return res; }\n"
+"Var cria_float(float v) { Var res; res.tipo = TIPO_FLOAT; res.valor.v_float = v; return res; }\n"
+"Var cria_char(char v) { Var res; res.tipo = TIPO_CHAR; res.valor.v_char = v; return res; }\n"
+"Var cria_bool(int v) { Var res; res.tipo = TIPO_BOOL; res.valor.v_bool = v; return res; }\n"
+"void print_dinamico(Var v) {\n"
+"    switch(v.tipo) {\n"
+"        case TIPO_INT: printf(\"%d\\n\", v.valor.v_int); break;\n"
+"        case TIPO_FLOAT: printf(\"%f\\n\", v.valor.v_float); break;\n"
+"        case TIPO_CHAR: printf(\"%c\\n\", v.valor.v_char); break;\n"
+"        case TIPO_BOOL: printf(\"%s\\n\", v.valor.v_bool ? \"true\" : \"false\"); break;\n"
+"    }\n"
+"}\n"
+"void erro_runtime(const char* operacao) {\n"
+"    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
+"    exit(1);\n"
+"}\n"
+"Var soma_dinamica(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_int(a.valor.v_int + b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_float + b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_int + b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_float(a.valor.v_float + b.valor.v_int);\n"
+"    erro_runtime(\"+\"); return cria_int(0);\n"
+"}\n"
+"Var sub_dinamica(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_int(a.valor.v_int - b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_float - b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_int - b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_float(a.valor.v_float - b.valor.v_int);\n"
+"    erro_runtime(\"-\"); return cria_int(0);\n"
+"}\n"
+"Var mult_dinamica(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_int(a.valor.v_int * b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_float * b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_int * b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_float(a.valor.v_float * b.valor.v_int);\n"
+"    erro_runtime(\"*\"); return cria_int(0);\n"
+"}\n"
+"Var div_dinamica(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_int(a.valor.v_int / b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_float / b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_float(a.valor.v_int / b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_float(a.valor.v_float / b.valor.v_int);\n"
+"    erro_runtime(\"/\"); return cria_int(0);\n"
+"}\n"
+"Var maior_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int > b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float > b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int > b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float > b.valor.v_int);\n"
+"    erro_runtime(\">\"); return cria_bool(0);\n"
+"}\n"
+"Var menor_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int < b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float < b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int < b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float < b.valor.v_int);\n"
+"    erro_runtime(\"<\"); return cria_bool(0);\n"
+"}\n"
+"Var maior_igual_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int >= b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float >= b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int >= b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float >= b.valor.v_int);\n"
+"    erro_runtime(\">=\"); return cria_bool(0);\n"
+"}\n"
+"Var menor_igual_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int <= b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float <= b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int <= b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float <= b.valor.v_int);\n"
+"    erro_runtime(\"<=\"); return cria_bool(0);\n"
+"}\n"
+"Var igual_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int == b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float == b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int == b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float == b.valor.v_int);\n"
+"    if (a.tipo == TIPO_CHAR && b.tipo == TIPO_CHAR) return cria_bool(a.valor.v_char == b.valor.v_char);\n"
+"    if (a.tipo == TIPO_BOOL && b.tipo == TIPO_BOOL) return cria_bool(a.valor.v_bool == b.valor.v_bool);\n"
+"    erro_runtime(\"==\"); return cria_bool(0);\n"
+"}\n"
+"Var diferente_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_int != b.valor.v_int);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_float != b.valor.v_float);\n"
+"    if (a.tipo == TIPO_INT && b.tipo == TIPO_FLOAT) return cria_bool(a.valor.v_int != b.valor.v_float);\n"
+"    if (a.tipo == TIPO_FLOAT && b.tipo == TIPO_INT) return cria_bool(a.valor.v_float != b.valor.v_int);\n"
+"    if (a.tipo == TIPO_CHAR && b.tipo == TIPO_CHAR) return cria_bool(a.valor.v_char != b.valor.v_char);\n"
+"    if (a.tipo == TIPO_BOOL && b.tipo == TIPO_BOOL) return cria_bool(a.valor.v_bool != b.valor.v_bool);\n"
+"    erro_runtime(\"!=\"); return cria_bool(0);\n"
+"}\n"
+"Var and_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_BOOL && b.tipo == TIPO_BOOL) return cria_bool(a.valor.v_bool && b.valor.v_bool);\n"
+"    erro_runtime(\"&&\"); return cria_bool(0);\n"
+"}\n"
+"Var or_dinamico(Var a, Var b) {\n"
+"    if (a.tipo == TIPO_BOOL && b.tipo == TIPO_BOOL) return cria_bool(a.valor.v_bool || b.valor.v_bool);\n"
+"    erro_runtime(\"||\"); return cria_bool(0);\n"
+"}\n"
+"Var not_dinamico(Var a) {\n"
+"    if (a.tipo == TIPO_BOOL) return cria_bool(!a.valor.v_bool);\n"
+"    erro_runtime(\"!\"); return cria_bool(0);\n"
+"}\n";
+
 %}
 
 // Literais
@@ -66,11 +161,7 @@ string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[ti
 %token TK_CHAR
 %token TK_BOOL
 
-// Tipos
-%token TK_TIPO_INT
-%token TK_TIPO_FLOAT
-%token TK_TIPO_CHAR
-%token TK_TIPO_BOOL
+%token TK_PRINT
 
 // Identificador
 %token TK_ID
@@ -92,27 +183,24 @@ string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[ti
 %left '+' '-'
 %left '*' '/'
 %right '!'
-%right CAST
 
 %%
-	/* 		   Início			*/
+	/* Início			*/
 PROGRAMA 	: LISTA_COMANDOS
 			{
-				codigo_gerado = "/*Compilador FOCA*/\n"
-								"#include <stdio.h>\n\n"
-								"#define true 1\n"
-								"#define false 0\n"
-								"#define bool int\n\n"
-								"int main(void) {\n";
+				codigo_gerado = runtime_c + "\nint main(void) {\n";
 
-				for (int i = 0; i < tipos_dos_temporarios.size(); i++) {
-					codigo_gerado += "\t" + tipos_dos_temporarios[i] + " t" + to_string(i+1) + ";\n";
+				for (int i = 1; i <= var_temp_qnt; i++) {
+					codigo_gerado += "\tVar t" + to_string(i) + ";\n";
+				}
+
+				for (const string& nome_var : variaveis_declaradas) {
+					codigo_gerado += "\tVar " + nome_var + ";\n";
 				}
 
 				codigo_gerado += "\n" + $1.traducao;
 
-				codigo_gerado += "\treturn 0;"
-							"\n}\n";
+				codigo_gerado += "\treturn 0;\n}\n";
 			}
 			;
 
@@ -127,489 +215,154 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
-	/* Tipos */
-TIPO		: TK_TIPO_INT   { $$.tipo = "int";   }
-			| TK_TIPO_FLOAT { $$.tipo = "float"; }
-			| TK_TIPO_CHAR  { $$.tipo = "char";  }
-			| TK_TIPO_BOOL  { $$.tipo = "bool";  }
-			;
-
-	/* Comando */
-CMD			: TIPO TK_ID ';' // Regra de DECLARAÇÃO 
+/* Comando */
+CMD			: TK_ID '=' E ';'
 			{
-				declarar_variavel($2.label, $1.tipo);
-				$$.traducao = "";
+				registrar_variavel($1.label);
+				$$.traducao = $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
-			| TK_ID '=' E ';' // Regra de ATRIBUIÇÃO 
+			| TK_PRINT '(' E ')' ';'
 			{
-				Simbolo s = buscar_simbolo($1.label);
-				
-				string tipo_resultante = obter_tipo_atribuicao(s.tipo, $3.tipo);
-				string linha_conversao = "";
-
-				string label_expressao = $3.label;
-
-				if (s.tipo != $3.tipo) {
-					if (tipo_resultante == "erro") {
-						yyerror("Atribuicao invalida: '" + $1.label + "' (" + s.tipo + ") nao pode receber tipo '" + $3.tipo + "'.");
-						exit(1);
-					}
-					else {
-						label_expressao = gentempcode(tipo_resultante);
-						linha_conversao = "\t" + label_expressao + " = (" + tipo_resultante + ") "  +
-							$3.label + ";\n";
-					}
-				}
-
-				$$.traducao = $3.traducao + linha_conversao +"\t" + s.label + " = " + label_expressao + ";\n";
+				$$.traducao = $3.traducao + "\tprint_dinamico(" + $3.label + ");\n";
 			}
-			| E ';' 
-            {
-                $$.traducao = $1.traducao; 
-            }
+			| E ';'
+			{
+                $$.traducao = $1.traducao;
+			}
 		    ;
 
-	/* 		  Expressão 		*/
-	/* 		Identificador		*/
+/* Expressão 		*/
+	/* Identificador		*/
 E 			: TK_ID
 			{
-				Simbolo s = buscar_simbolo($1.label);
-				$$.label = s.label;
-				$$.tipo = s.tipo;
-				$$.traducao = "";
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 			}
 	
 	/*		  Literais			*/
 			| TK_INT
-
 			{
-			$$.label = gentempcode("int");
-			$$.tipo = "int";
-			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = cria_int(" + $1.label + ");\n";
 			}
 
 			| TK_FLOAT
 			{
-			$$.label = gentempcode("float");
-			$$.tipo = "float";
-			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = cria_float(" + $1.label + ");\n";
 			}
 
 			| TK_CHAR
 			{
-			$$.label = gentempcode("char");
-			$$.tipo = "char";
-			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = cria_char(" + $1.label + ");\n";
 			}
 
 			| TK_BOOL
 			{
-			$$.label = gentempcode("bool");
-			$$.tipo = "bool";
-			$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n"; 
+				$$.label = gentempcode();
+				string valor_c = ($1.label == "true") ? "1" : "0";
+				$$.traducao = "\t" + $$.label + " = cria_bool(" + valor_c + ");\n"; 
 			}
 
-	/* 	Operadores Aritméticos	*/ 
+	/* Operadores Aritméticos	*/ 
 			| E '+' E
 			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel somar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " + " + operando2 + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + 
+					"\t" + $$.label + " = soma_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '-' E
 			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel subtrair tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " - " + operando2 + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + 
+					"\t" + $$.label + " = sub_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '*' E
 			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel multiplicar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " * " + operando2 + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + 
+					"\t" + $$.label + " = mult_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '/' E
 			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel dividir tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " / " + operando2 + ";\n";	
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + 
+					"\t" + $$.label + " = div_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
-	/* 	Operadores Relacionais	*/ 
+	/* Operadores Relacionais	*/ 
 			| E '>' E
 			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '>'.");
-						exit(1);
-				}
-
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " > " + operando2 + ";\n";		
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao +
+				"\t" + $$.label + " = maior_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '<' E
 			{
-
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '<'.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " < " + operando2 + ";\n";	
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao +
+				"\t" + $$.label + " = menor_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_GE E
 			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '>='.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " >= " + operando2 + ";\n";		
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao +
+				"\t" + $$.label + " = maior_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_LE E
 			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '<='.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " <= " + operando2 + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao +
+				"\t" + $$.label + " = menor_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_EQ E
 			{
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-
-				if ($1.tipo != $3.tipo) {
-                    string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-                    if (tipo_resultante == "erro") {
-                        yyerror("Operacao invalida: nao e possivel comparar '" + $1.tipo + "' com '" + $3.tipo + "'.");
-                        exit(1);
-                    }
-
-					// Lógica de Conversão Implícita
-					if ($1.tipo != tipo_resultante) {
-						operando1 = gentempcode(tipo_resultante); 
-						linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-							$1.label + ";\n";
-					}
-					if ($3.tipo != tipo_resultante) {
-						operando2 = gentempcode(tipo_resultante);
-						linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-							$3.label + ";\n";
-					}
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-				"\t" + $$.label + " = " + operando1 + " == " + operando2 + ";\n";		
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + 
+				"\t" + $$.label + " = igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_DIF E
 			{
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				if ($1.tipo != $3.tipo) {
-                    string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-                    if (tipo_resultante == "erro") {
-                        yyerror("Operacao invalida: nao e possivel comparar '" + $1.tipo + "' com '" + $3.tipo + "'.");
-                        exit(1);
-                    }
-
-					// Lógica de Conversão Implícita
-					if ($1.tipo != tipo_resultante) {
-						operando1 = gentempcode(tipo_resultante); 
-						linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-							$1.label + ";\n";
-					}
-					if ($3.tipo != tipo_resultante) {
-						operando2 = gentempcode(tipo_resultante);
-						linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-							$3.label + ";\n";
-					}
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " != " + operando2 + ";\n";		
+				$$.label = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao +
+				"\t" + $$.label + " = diferente_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
-	/* 	  Operadores Lógicos    */ 
+	/* Operadores Lógicos    */ 
 			| E TK_AND E
 			{
-				if ($1.tipo != "bool" || $3.tipo != "bool") {
-					yyerror("Operacao invalida: operador '&&' aceita somente bool.");
-						exit(1);
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
+				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
-					" = " + $1.label + " && " + $3.label + ";\n";		
+					" = and_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_OR E
 			{
-				if ($1.tipo != "bool" || $3.tipo != "bool") {
-					yyerror("Operacao invalida: operador '||' aceita somente bool.");
-						exit(1);
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
+				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
-					" = " + $1.label + " || " + $3.label + ";\n";		
+					" = or_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| '!' E
 			{
-				if ($2.tipo != "bool") {
-					yyerror("Operacao invalida: operador '!' aceita somente bool.");
-						exit(1);
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $2.traducao + "\t" + $$.label + " = " + 
-					"!" + $2.label + ";\n";
+				$$.label = gentempcode();
+				$$.traducao = $2.traducao + "\t" + $$.label + " = not_dinamico(" + $2.label + ");\n";
 			}
 
-	/*        Parênteses		*/ 
+	/* Parênteses		*/ 
 			| '(' E ')'
 			{
 				$$.label = $2.label;
-				$$.tipo = $2.tipo;
 				$$.traducao = $2.traducao;
-			}
-
-	/*        Conversão Explícita (Cast)    */ 
-			| '(' TIPO ')' E %prec CAST
-			{
-				$$.tipo = $2.tipo;
-				$$.label = gentempcode($2.tipo);
-				string instrucao_cast = "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
-				$$.traducao = $4.traducao + instrucao_cast;
 			}
 			;
 
@@ -617,37 +370,9 @@ E 			: TK_ID
 
 #include "lex.yy.c"
 
+
+
 int yyparse();
-
-string gentempcode(string tipo) {
-	var_temp_qnt++;
-	tipos_dos_temporarios.push_back(tipo);
-
-	return "t" + to_string(var_temp_qnt);
-}
-
-void declarar_variavel(string nome, string tipo) {
-	if (tabela_simbolos.count(nome)) {
-		yyerror("Erro Semantico: Variavel '" + nome + "' ja declarada");
-		exit(1);
-	} else {
-		string temp_label = gentempcode(tipo);
-        Simbolo s;
-        s.tipo = tipo;
-        s.label = temp_label;
-        tabela_simbolos[nome] = s;
-	}
-}
-
-Simbolo buscar_simbolo(string nome) {
-	if (tabela_simbolos.count(nome)) {
-		return tabela_simbolos[nome];
-	} else {
-		yyerror("Erro Semantico: Variavel '" + nome + "' nao declarada.");
-		exit(1);
-	}
-}
-
 
 int main(int argc, char* argv[]) {
 	var_temp_qnt = 0;
