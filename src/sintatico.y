@@ -39,7 +39,8 @@ void registrar_variavel(string nome) {
 string runtime_c = 
 "#include <stdio.h>\n"
 "#include <stdlib.h>\n"
-"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL } TipoVar;\n"
+"#include <string.h>\n"
+"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL, TIPO_STRING } TipoVar;\n"
 "typedef struct {\n"
 "    TipoVar tipo;\n"
 "    union {\n"
@@ -47,12 +48,20 @@ string runtime_c =
 "        float v_float;\n"
 "        char v_char;\n"
 "        int v_bool;\n"
+"        char* v_string;\n"
 "    } valor;\n"
 "} Var;\n"
 "Var cria_int(int v) { Var res; res.tipo = TIPO_INT; res.valor.v_int = v; return res; }\n"
 "Var cria_float(float v) { Var res; res.tipo = TIPO_FLOAT; res.valor.v_float = v; return res; }\n"
 "Var cria_char(char v) { Var res; res.tipo = TIPO_CHAR; res.valor.v_char = v; return res; }\n"
 "Var cria_bool(int v) { Var res; res.tipo = TIPO_BOOL; res.valor.v_bool = v; return res; }\n"
+"\n"
+"Var cria_string(const char* v) {\n"
+"    Var res; res.tipo = TIPO_STRING;\n"
+"    res.valor.v_string = (char*)malloc(strlen(v) + 1);\n"
+"    strcpy(res.valor.v_string, v);\n"
+"    return res;\n"
+"}\n"
 "\n"
 "void erro_runtime(const char* operacao) {\n"
 "    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
@@ -71,9 +80,12 @@ string runtime_c =
 "    cond = (v.tipo == TIPO_CHAR); if (cond == 0) goto L_PRINT_BOOL;\n"
 "    printf(\"%c\\n\", v.valor.v_char); goto L_PRINT_FIM;\n"
 "L_PRINT_BOOL:\n"
-"    cond = (v.tipo == TIPO_BOOL); if (cond == 0) goto L_PRINT_FIM;\n"
+"    cond = (v.tipo == TIPO_BOOL); if (cond == 0) goto L_PRINT_STRING;\n"
 "    cond = (v.valor.v_bool == 1); if (cond == 0) goto L_PRINT_FALSE;\n"
 "    printf(\"true\\n\"); goto L_PRINT_FIM;\n"
+"L_PRINT_STRING:\n" 
+"    cond = (v.tipo == TIPO_STRING); if (cond == 0) goto L_PRINT_FIM;\n"
+"    printf(\"%s\\n\", v.valor.v_string); goto L_PRINT_FIM;\n"
 "L_PRINT_FALSE:\n"
 "    printf(\"false\\n\");\n"
 "L_PRINT_FIM:\n"
@@ -83,6 +95,7 @@ string runtime_c =
 "Var soma_dinamica(Var a, Var b) {\n"
 "    Var r;\n"
 "    int c;\n"
+"    char* tmp_str;\n"
 "L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
 "    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
 "    r = cria_int(a.valor.v_int + b.valor.v_int); goto FIM;\n"
@@ -92,9 +105,16 @@ string runtime_c =
 "L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
 "    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
 "    r = cria_float(a.valor.v_int + b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
+"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
 "    r = cria_float(a.valor.v_float + b.valor.v_int); goto FIM;\n"
+"L5: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+"    tmp_str = (char*)malloc(strlen(a.valor.v_string) + strlen(b.valor.v_string) + 1);\n"
+"    strcpy(tmp_str, a.valor.v_string);\n"
+"    strcat(tmp_str, b.valor.v_string);\n"
+"    r = cria_string(tmp_str);\n"
+"    free(tmp_str); goto FIM;\n"
 "L_ERR:\n"
 "    erro_runtime(\"+\");\n"
 "FIM:\n"
@@ -185,6 +205,11 @@ string runtime_c =
 "L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
 "    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
 "    r = cria_bool(a.valor.v_bool == b.valor.v_bool); goto FIM;\n"
+"L7: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+"    // Compara Strings TAC Style usando strcmp\n"
+"    c = strcmp(a.valor.v_string, b.valor.v_string);\n"
+"    r = cria_bool(c == 0); goto FIM;\n"
 "L_ERR:\n"
 "    erro_runtime(\"==\");\n"
 "FIM:\n"
@@ -350,6 +375,7 @@ string runtime_c =
 %token TK_FLOAT
 %token TK_CHAR
 %token TK_BOOL
+%token TK_STRING
 
 %token TK_PRINT
 
@@ -446,6 +472,12 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = cria_char(" + $1.label + ");\n";
+			}
+
+			| TK_STRING
+			{
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = cria_string(" + $1.label + ");\n";
 			}
 
 			| TK_BOOL

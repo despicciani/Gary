@@ -33,6 +33,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /*          Char           */
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
 
+    /*          String           */
+\"[^\"]*\"  { yylval.label = yytext; return TK_STRING; }
+
     /*   Atribuição e ;        */
 [=;]		{ return *yytext; }
 
