@@ -403,6 +403,9 @@ string runtime_c =
 // Identificador
 %token TK_ID
 
+// tokens da identacao por tabulacao
+%token TK_INDENT TK_DEDENT TK_NEWLINE
+
 // Tokens Relacionais
 %token TK_GE TK_LE TK_EQ TK_DIF
 
@@ -453,16 +456,16 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					;
 
 /* Comando */
-CMD			: TK_ID '=' E ';'
+CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				registrar_variavel($1.label);
 				$$.traducao = $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
-			| TK_PRINT '(' E ')' ';'
+			| TK_PRINT '(' E ')' TK_NEWLINE
 			{
 				$$.traducao = $3.traducao + "\tprint_dinamico(" + $3.label + ");\n";
 			}
-			| E ';'
+			| E TK_NEWLINE
 			{
                 $$.traducao = $1.traducao;
 			}
