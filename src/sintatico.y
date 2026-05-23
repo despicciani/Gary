@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <stack>
 
 #define YYSTYPE atributos
 
@@ -27,6 +28,15 @@ string gentempcode() {
 	var_temp_qnt++;
 	return "t" + to_string(var_temp_qnt);
 }
+
+int label_qnt = 0;
+string gen_label() {
+    label_qnt++;
+    return "LBL_CTRL_" + to_string(label_qnt);
+}
+
+stack<string> switch_var_stack;
+stack<string> switch_fim_stack;
 
 void registrar_variavel(string nome) {
 	if (!tabela_simbolos.count(nome)) {
@@ -66,6 +76,14 @@ string runtime_c =
 "void erro_runtime(const char* operacao) {\n"
 "    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
 "    exit(1);\n"
+"}\n"
+"\n"
+"int eh_verdadeiro(Var v) {\n"
+"    if (v.tipo == TIPO_BOOL) return v.valor.v_bool;\n"
+"    if (v.tipo == TIPO_INT) return (v.valor.v_int != 0);\n"
+"    if (v.tipo == TIPO_FLOAT) return (v.valor.v_float != 0.0);\n"
+"    if (v.tipo == TIPO_STRING) return (strlen(v.valor.v_string) > 0);\n"
+"    return 1;\n"
 "}\n"
 "\n"
 "void print_dinamico(Var v) {\n"
@@ -400,6 +418,9 @@ string runtime_c =
 %token TK_PRINT
 %token TK_INPUT
 
+%token TK_IF TK_ELSE TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
+%token TK_IN TK_TO TK_INC
+
 // Identificador
 %token TK_ID
 
@@ -455,11 +476,23 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
-/* Comando */
-CMD			: TK_ID '=' E TK_NEWLINE
+	/* regra isolada de atribuicao, q o FOR e o CMD vao usar */
+ATRIB		: TK_ID '=' E
 			{
 				registrar_variavel($1.label);
 				$$.traducao = $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
+			}
+			;
+
+	/* Comando */
+CMD			: ATRIB TK_NEWLINE
+			{
+				$$.traducao = $1.traducao;
+			}
+			//absorve linhas sobrando no codigo (no final dele)
+			| TK_NEWLINE
+			{
+				$$.traducao = ""; 
 			}
 			| TK_PRINT '(' E ')' TK_NEWLINE
 			{
@@ -469,7 +502,143 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			{
                 $$.traducao = $1.traducao;
 			}
+
+			/* x++ */
+			| TK_ID TK_INC TK_NEWLINE
+			{
+				registrar_variavel($1.label);
+				string temp_um = gentempcode();
+				
+				// TAC: x = soma_dinamica(x, 1);
+				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
+							  "\t" + $1.label + " = soma_dinamica(" + $1.label + ", " + temp_um + ");\n";
+			}
+
+			/* if isolado */
+			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_fim = gen_label();
+				$$.traducao = $2.traducao + 
+							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
+							  $6.traducao +
+							  l_fim + ":\n";
+			}
+
+			/* if else */
+			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT TK_ELSE ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_falso = gen_label();
+				string l_fim = gen_label();
+				$$.traducao = $2.traducao + 
+							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_falso + ";\n" +
+							  $6.traducao +
+							  "\tgoto " + l_fim + ";\n" +
+							  l_falso + ":\n" +
+							  $12.traducao +
+							  l_fim + ":\n";
+			}
+
+			/* while */
+			| TK_WHILE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_inicio = gen_label();
+				string l_fim = gen_label();
+				$$.traducao = l_inicio + ":\n" +
+							  $2.traducao +
+							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
+							  $6.traducao +
+							  "\tgoto " + l_inicio + ";\n" +
+							  l_fim + ":\n";
+			}
+
+	/* do while (executa o bloco e testa se eh true no final) */
+			| TK_DO ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT TK_WHILE E TK_NEWLINE
+			{
+				string l_inicio = gen_label();
+				$$.traducao = l_inicio + ":\n" +
+							  $5.traducao +
+							  $8.traducao +
+							  "\tif (eh_verdadeiro(" + $8.label + ") != 0) goto " + l_inicio + ";\n";
+			}
+
+	/* for i in x to y: */
+			| TK_FOR TK_ID TK_IN E TK_TO E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_inicio = gen_label();
+				string l_fim = gen_label();
+				string temp_cond = gentempcode();
+				string temp_um = gentempcode();
+				
+				// registra a variavel iteradora (i)
+				registrar_variavel($2.label);
+				
+				// inicializa i com o valor de x
+				string trad_init = $4.traducao + "\t" + $2.label + " = " + $4.label + ";\n";
+				
+				// monta o laço
+				$$.traducao = trad_init + 
+							  l_inicio + ":\n" +
+							  $6.traducao + // avalia o teto (y)
+							  "\t" + temp_cond + " = menor_igual_dinamico(" + $2.label + ", " + $6.label + ");\n" +
+							  "\tif (eh_verdadeiro(" + temp_cond + ") == 0) goto " + l_fim + ";\n" +
+							  $10.traducao + // corpo do for
+							  "\t" + temp_um + " = cria_int(1);\n" + 
+							  "\t" + $2.label + " = soma_dinamica(" + $2.label + ", " + temp_um + ");\n" + // i = i+1
+							  "\tgoto " + l_inicio + ";\n" +
+							  l_fim + ":\n";
+			}
+
+	/* switch case (basicametne uma cascata de ifs */
+			| TK_SWITCH E ':' TK_NEWLINE TK_INDENT 
+			{ 
+				switch_var_stack.push($2.label); 
+				switch_fim_stack.push(gen_label()); 
+			} 
+			LISTA_CASOS TK_DEDENT
+			{
+				$$.traducao = $2.traducao + $7.traducao + switch_fim_stack.top() + ":\n";
+				switch_var_stack.pop();
+				switch_fim_stack.pop();
+			}
 		    ;
+
+/* regras relacionadas ao switch */
+LISTA_CASOS	: CASO LISTA_CASOS 
+			{ 
+				$$.traducao = $1.traducao + $2.traducao; 
+			}
+			| DEFAULT 
+			{ 
+				$$.traducao = $1.traducao; 
+			}
+			| 
+			{ 
+				$$.traducao = ""; 
+			}
+			;
+
+CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_prox_caso = gen_label();
+				string var_switch = switch_var_stack.top();
+				string l_fim = switch_fim_stack.top();
+				string var_teste = gentempcode();
+				
+				$$.traducao = $2.traducao +
+							  "\t" + var_teste + " = igual_dinamico(" + var_switch + ", " + $2.label + ");\n" +
+							  "\tif (eh_verdadeiro(" + var_teste + ") == 0) goto " + l_prox_caso + ";\n" +
+							  $6.traducao +
+							  "\tgoto " + l_fim + ";\n" +
+							  l_prox_caso + ":\n";
+			}
+			;
+
+DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string l_fim = switch_fim_stack.top();
+				$$.traducao = $5.traducao + "\tgoto " + l_fim + ";\n";
+			}
+			;
 
 /* Expressão 		*/
 	/* Identificador		*/
