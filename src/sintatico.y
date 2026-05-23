@@ -92,6 +92,33 @@ string runtime_c =
 "    return;\n"
 "}\n"
 "\n"
+"Var input_dinamico() {\n"
+"    char buffer[1024];\n"
+"    int len;\n"
+"    char* endptr;\n"
+"    long val_int;\n"
+"    double val_float;\n"
+"\n"
+"    if (fgets(buffer, 1024, stdin) == NULL) buffer[0] = '\\0';\n"
+"\n"
+"    len = strlen(buffer);\n" //p tirar o \n do final
+"    if (len > 0 && buffer[len-1] == '\\n') { buffer[len-1] = '\\0'; len--; }\n"
+"    if (len > 0 && buffer[len-1] == '\\r') { buffer[len-1] = '\\0'; len--; }\n"
+"\n"
+"    if (strcmp(buffer, \"true\") == 0) return cria_bool(1);\n"
+"    if (strcmp(buffer, \"false\") == 0) return cria_bool(0);\n"
+"\n"
+"    val_int = strtol(buffer, &endptr, 10);\n"
+"    if (endptr != buffer && *endptr == '\\0') return cria_int((int)val_int);\n"
+"\n"
+"    val_float = strtod(buffer, &endptr);\n"
+"    if (endptr != buffer && *endptr == '\\0') return cria_float((float)val_float);\n"
+"\n"
+"    if (len == 1) return cria_char(buffer[0]);\n"
+"\n"
+"    return cria_string(buffer);\n"
+"}\n"
+"\n"
 "Var soma_dinamica(Var a, Var b) {\n"
 "    Var r;\n"
 "    int c;\n"
@@ -202,12 +229,11 @@ string runtime_c =
 "L5: c = (a.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
 "    c = (b.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
 "    r = cria_bool(a.valor.v_char == b.valor.v_char); goto FIM;\n"
-"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
+"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
 "    r = cria_bool(a.valor.v_bool == b.valor.v_bool); goto FIM;\n"
 "L7: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
 "    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
-"    // Compara Strings TAC Style usando strcmp\n"
 "    c = strcmp(a.valor.v_string, b.valor.v_string);\n"
 "    r = cria_bool(c == 0); goto FIM;\n"
 "L_ERR:\n"
@@ -227,12 +253,6 @@ string runtime_c =
 "FIM:\n"
 "    return r;\n"
 "}\n"
-"\n"
-"Var input_dinamico() {\n"
-"    float temp;\n"
-"    scanf(\"%f\", &temp);\n"
-"    return cria_float(temp);\n"
-"}\n"   
 "\n"
 "Var maior_dinamico(Var a, Var b) {\n"
 "    Var r;\n"
@@ -378,6 +398,7 @@ string runtime_c =
 %token TK_STRING
 
 %token TK_PRINT
+%token TK_INPUT
 
 // Identificador
 %token TK_ID
@@ -485,6 +506,13 @@ E 			: TK_ID
 				$$.label = gentempcode();
 				string valor_c = ($1.label == "true") ? "1" : "0";
 				$$.traducao = "\t" + $$.label + " = cria_bool(" + valor_c + ");\n"; 
+			}
+
+	/* Função Input */
+			| TK_INPUT '(' ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = input_dinamico();\n";
 			}
 
 	/* Operadores Aritméticos	*/ 

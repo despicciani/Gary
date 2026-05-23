@@ -24,6 +24,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
 
 "print"     { return TK_PRINT; }
+"input"     { return TK_INPUT; }
 
     /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
