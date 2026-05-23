@@ -14,6 +14,7 @@ bool enter_eof_emitido = false;
 %}
 
 %option noyywrap
+%x CHECK_INDENT
 
 DIGITO [0-9]
 
@@ -48,6 +49,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     if (!inicio_configurado) {
         pilhas_indentacao.push(0);
         inicio_configurado = true;
+        BEGIN(CHECK_INDENT); 
     }
 
     if (dedents_pendentes > 0) {
@@ -56,31 +58,24 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     }
 %}
 
-    //ignora as linhas em branco, mas conta a linha
-
-^[ \t]*\r?\n    { linha++; }
-
-    
-^[ \t]*         {
+<CHECK_INDENT>[ \t]+ {
     int indentacao_atual = 0;
-    
-        //1 tab = 4 espacos
     for (int i = 0; i < yyleng; i++) {
         if (yytext[i] == '\t') indentacao_atual += 4;
         else indentacao_atual += 1;
     }
-
+    
+    BEGIN(INITIAL); 
+    
     if (indentacao_atual > pilhas_indentacao.top()) {
         pilhas_indentacao.push(indentacao_atual);
         return TK_INDENT;
     } 
-    //calcula quantos dedents tem q ser emitidos
     else if (indentacao_atual < pilhas_indentacao.top()) {
         while (pilhas_indentacao.top() > indentacao_atual) {
             pilhas_indentacao.pop();
             dedents_pendentes++;
         }
-
         if (dedents_pendentes > 0) {
             dedents_pendentes--;
             return TK_DEDENT;
@@ -88,9 +83,35 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     }
 }
 
-\r?\n           { linha++; return TK_NEWLINE; }
+    
+<CHECK_INDENT>\r?\n {
+    linha++;
+}
 
-[ \t]+  {}
+<CHECK_INDENT>. {
+    yyless(0); 
+    BEGIN(INITIAL); 
+    
+    int indentacao_atual = 0;
+    if (indentacao_atual < pilhas_indentacao.top()) {
+        while (pilhas_indentacao.top() > indentacao_atual) {
+            pilhas_indentacao.pop();
+            dedents_pendentes++;
+        }
+        if (dedents_pendentes > 0) {
+            dedents_pendentes--;
+            return TK_DEDENT;
+        }
+    }
+}
+
+<CHECK_INDENT><<EOF>> {
+    BEGIN(INITIAL);
+}
+
+\r?\n           { linha++; BEGIN(CHECK_INDENT); return TK_NEWLINE; }
+
+[ \t]+          { }
 
 
         /*          Tipos          */
