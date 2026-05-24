@@ -58,6 +58,7 @@ void declarar_variavel(string nome, string tipo);
 Simbolo buscar_simbolo(string nome);
 string obter_tipo_resultante(string t1, string t2) { return matriz_conversao_implicita[tipo_para_id[t1]][tipo_para_id[t2]]; } 
 string obter_tipo_atribuicao(string t1, string t2) { return matriz_atribuicao[tipo_para_id[t1]][tipo_para_id[t2]]; } 
+atributos gerar_operacao(atributos esq, atributos dir, string op, bool eh_relacional);
 %}
 
 // Literais
@@ -210,350 +211,18 @@ E 			: TK_ID
 			}
 
 	/* 	Operadores Aritméticos	*/ 
-			| E '+' E
-			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel somar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " + " + operando2 + ";\n";
-			}
-
-			| E '-' E
-			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel subtrair tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " - " + operando2 + ";\n";
-			}
-
-			| E '*' E
-			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel multiplicar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " * " + operando2 + ";\n";
-			}
-
-			| E '/' E
-			{
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel dividir tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode(tipo_resultante);
-				$$.tipo = tipo_resultante;
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-					"\t" + $$.label + " = " + operando1 + " / " + operando2 + ";\n";	
-			}
+			| E '+' E { $$ = gerar_operacao($1, $3, "+", false); }
+			| E '-' E { $$ = gerar_operacao($1, $3, "-", false); }
+			| E '*' E { $$ = gerar_operacao($1, $3, "*", false); }
+			| E '/' E { $$ = gerar_operacao($1, $3, "/", false); }
 
 	/* 	Operadores Relacionais	*/ 
-			| E '>' E
-			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '>'.");
-						exit(1);
-				}
-
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " > " + operando2 + ";\n";		
-			}
-
-			| E '<' E
-			{
-
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '<'.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " < " + operando2 + ";\n";	
-			}
-
-			| E TK_GE E
-			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '>='.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " >= " + operando2 + ";\n";		
-			}
-
-			| E TK_LE E
-			{
-				if ($1.tipo == "bool" || $3.tipo == "bool") {
-					yyerror("Operacao invalida: tipo bool nao aceita operador '<='.");
-						exit(1);
-				}
-				
-				string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-
-				if (tipo_resultante == "erro") {
-					yyerror("Operacao invalida: nao e possivel comparar tipos '" + $1.tipo + "' e '" + $3.tipo + "'.");
-					exit(1);
-				}
-
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				// Lógica de Conversão Implícita
-				if ($1.tipo != tipo_resultante) {
-					operando1 = gentempcode(tipo_resultante); 
-					linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-						$1.label + ";\n";
-				}
-				if ($3.tipo != tipo_resultante) {
-					operando2 = gentempcode(tipo_resultante);
-					linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-						$3.label + ";\n";
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " <= " + operando2 + ";\n";
-			}
-
-			| E TK_EQ E
-			{
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-
-				if ($1.tipo != $3.tipo) {
-                    string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-                    if (tipo_resultante == "erro") {
-                        yyerror("Operacao invalida: nao e possivel comparar '" + $1.tipo + "' com '" + $3.tipo + "'.");
-                        exit(1);
-                    }
-
-					// Lógica de Conversão Implícita
-					if ($1.tipo != tipo_resultante) {
-						operando1 = gentempcode(tipo_resultante); 
-						linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-							$1.label + ";\n";
-					}
-					if ($3.tipo != tipo_resultante) {
-						operando2 = gentempcode(tipo_resultante);
-						linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-							$3.label + ";\n";
-					}
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao + 
-				"\t" + $$.label + " = " + operando1 + " == " + operando2 + ";\n";		
-			}
-
-			| E TK_DIF E
-			{
-				string linha_conversao = "";
-
-				string operando1 = $1.label;
-				string operando2 = $3.label;
-
-				if ($1.tipo != $3.tipo) {
-                    string tipo_resultante = obter_tipo_resultante($1.tipo, $3.tipo);
-                    if (tipo_resultante == "erro") {
-                        yyerror("Operacao invalida: nao e possivel comparar '" + $1.tipo + "' com '" + $3.tipo + "'.");
-                        exit(1);
-                    }
-
-					// Lógica de Conversão Implícita
-					if ($1.tipo != tipo_resultante) {
-						operando1 = gentempcode(tipo_resultante); 
-						linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") "  +
-							$1.label + ";\n";
-					}
-					if ($3.tipo != tipo_resultante) {
-						operando2 = gentempcode(tipo_resultante);
-						linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") "  +
-							$3.label + ";\n";
-					}
-				}
-
-				$$.label = gentempcode("bool");
-				$$.tipo = "bool";
-				$$.traducao = $1.traducao + $3.traducao + linha_conversao +
-				"\t" + $$.label + " = " + operando1 + " != " + operando2 + ";\n";		
-			}
+			| E '>' E    { $$ = gerar_operacao($1, $3, ">",  true); }
+			| E '<' E    { $$ = gerar_operacao($1, $3, "<",  true); }
+			| E TK_GE E  { $$ = gerar_operacao($1, $3, ">=", true); }
+			| E TK_LE E  { $$ = gerar_operacao($1, $3, "<=", true); }
+			| E TK_EQ E  { $$ = gerar_operacao($1, $3, "==", true); }
+			| E TK_DIF E { $$ = gerar_operacao($1, $3, "!=", true); }
 
 	/* 	  Operadores Lógicos    */ 
 			| E TK_AND E
@@ -606,6 +275,16 @@ E 			: TK_ID
 	/*        Conversão Explícita (Cast)    */ 
 			| '(' TIPO ')' E %prec CAST
 			{
+				string tipo_resultante;
+
+				if ($2.tipo != $4.tipo) { 
+					tipo_resultante = obter_tipo_resultante($2.tipo, $4.tipo);
+					if (tipo_resultante == "erro") {
+						yyerror("Nao e possivel fazer o cast de '" + $4.tipo + "' para '" + $2.tipo + "'.");
+						exit(1);
+					}
+				}
+
 				$$.tipo = $2.tipo;
 				$$.label = gentempcode($2.tipo);
 				string instrucao_cast = "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
@@ -646,6 +325,55 @@ Simbolo buscar_simbolo(string nome) {
 		yyerror("Erro Semantico: Variavel '" + nome + "' nao declarada.");
 		exit(1);
 	}
+}
+
+atributos gerar_operacao(atributos esq, atributos dir, string op, bool eh_relacional) {
+	atributos resultado;
+
+	// Se for >, >=, <, <= não pode bool
+	if (eh_relacional && (op != "==" && op != "!=")) {
+		if (esq.tipo == "bool" || dir.tipo == "bool") {
+			yyerror("Operacao invalida: tipo bool nao aceita operador '" + op + "'.");
+			exit(1);
+		}
+	}
+
+	string tipo_resultante;
+	if ((op == "==" || op == "!=") && esq.tipo == dir.tipo){
+		tipo_resultante = esq.tipo;
+	}
+	else {
+		tipo_resultante = obter_tipo_resultante(esq.tipo, dir.tipo);
+	}
+
+	if (tipo_resultante == "erro") {
+		string acao = eh_relacional	? "comparar" : "operar";
+		yyerror("Operacao invalida: nao e possivel " + acao + " tipos '" + esq.tipo + "' e '" + dir.tipo + "'.");
+		exit(1);
+	}
+
+	string linha_conversao = "";
+	string operando1 = esq.label;
+	string operando2 = dir.label;
+
+	// Lógica Conversão Implícita
+	if (esq.tipo != tipo_resultante) {
+		operando1 = gentempcode(tipo_resultante);
+		linha_conversao = "\t" + operando1 + " = (" + tipo_resultante + ") " + esq.label + ";\n";  
+	}
+	if (dir.tipo != tipo_resultante) {
+		operando2 = gentempcode(tipo_resultante);
+		linha_conversao = "\t" + operando2 + " = (" + tipo_resultante + ") " + dir.label + ";\n";  
+	}
+
+	// Define tipo final, visto que relacionais retornarão sempre bool
+	resultado.tipo = eh_relacional ? "bool" : tipo_resultante;
+	resultado.label = gentempcode(resultado.tipo);
+
+	resultado.traducao = esq.traducao + dir.traducao + linha_conversao +
+							"\t" + resultado.label + " = " + operando1 + " " + op + " " + operando2 + ";\n";
+
+	return resultado;
 }
 
 
