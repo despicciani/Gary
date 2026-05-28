@@ -10,33 +10,30 @@
 using namespace std;
 
 int var_temp_qnt;
+int label_qnt = 0;
 int linha = 1;
 string codigo_gerado;
 
 vector<string> variaveis_declaradas;
 unordered_map<string, bool> tabela_simbolos;
 
+stack<string> switch_var_stack;
+stack<string> switch_fim_stack;
+
 struct atributos {
 	string label;
 	string traducao;
 };
-
-int yylex(void);
-void yyerror(string);
 
 string gentempcode() {
 	var_temp_qnt++;
 	return "t" + to_string(var_temp_qnt);
 }
 
-int label_qnt = 0;
 string gen_label() {
     label_qnt++;
     return "LBL_CTRL_" + to_string(label_qnt);
 }
-
-stack<string> switch_var_stack;
-stack<string> switch_fim_stack;
 
 void registrar_variavel(string nome) {
 	if (!tabela_simbolos.count(nome)) {
@@ -45,366 +42,406 @@ void registrar_variavel(string nome) {
 	}
 }
 
+int yylex(void);
+void yyerror(string);
+
 //codigo c q vai no final
 string runtime_c = 
-"#include <stdio.h>\n"
-"#include <stdlib.h>\n"
-"#include <string.h>\n"
-"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL, TIPO_STRING } TipoVar;\n"
-"typedef struct {\n"
-"    TipoVar tipo;\n"
-"    union {\n"
-"        int v_int;\n"
-"        float v_float;\n"
-"        char v_char;\n"
-"        int v_bool;\n"
-"        char* v_string;\n"
-"    } valor;\n"
-"} Var;\n"
-"Var cria_int(int v) { Var res; res.tipo = TIPO_INT; res.valor.v_int = v; return res; }\n"
-"Var cria_float(float v) { Var res; res.tipo = TIPO_FLOAT; res.valor.v_float = v; return res; }\n"
-"Var cria_char(char v) { Var res; res.tipo = TIPO_CHAR; res.valor.v_char = v; return res; }\n"
-"Var cria_bool(int v) { Var res; res.tipo = TIPO_BOOL; res.valor.v_bool = v; return res; }\n"
-"\n"
-"Var cria_string(const char* v) {\n"
-"    Var res; res.tipo = TIPO_STRING;\n"
-"    res.valor.v_string = (char*)malloc(strlen(v) + 1);\n"
-"    strcpy(res.valor.v_string, v);\n"
-"    return res;\n"
-"}\n"
-"\n"
-"void erro_runtime(const char* operacao) {\n"
-"    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
-"    exit(1);\n"
-"}\n"
-"\n"
-"int eh_verdadeiro(Var v) {\n"
-"    if (v.tipo == TIPO_BOOL) return v.valor.v_bool;\n"
-"    if (v.tipo == TIPO_INT) return (v.valor.v_int != 0);\n"
-"    if (v.tipo == TIPO_FLOAT) return (v.valor.v_float != 0.0);\n"
-"    if (v.tipo == TIPO_STRING) return (strlen(v.valor.v_string) > 0);\n"
-"    return 1;\n"
-"}\n"
-"\n"
-"void print_dinamico(Var v) {\n"
-"    int cond;\n"
-"L_PRINT_INT:\n"
-"    cond = (v.tipo == TIPO_INT); if (cond == 0) goto L_PRINT_FLOAT;\n"
-"    printf(\"%d\\n\", v.valor.v_int); goto L_PRINT_FIM;\n"
-"L_PRINT_FLOAT:\n"
-"    cond = (v.tipo == TIPO_FLOAT); if (cond == 0) goto L_PRINT_CHAR;\n"
-"    printf(\"%f\\n\", v.valor.v_float); goto L_PRINT_FIM;\n"
-"L_PRINT_CHAR:\n"
-"    cond = (v.tipo == TIPO_CHAR); if (cond == 0) goto L_PRINT_BOOL;\n"
-"    printf(\"%c\\n\", v.valor.v_char); goto L_PRINT_FIM;\n"
-"L_PRINT_BOOL:\n"
-"    cond = (v.tipo == TIPO_BOOL); if (cond == 0) goto L_PRINT_STRING;\n"
-"    cond = (v.valor.v_bool == 1); if (cond == 0) goto L_PRINT_FALSE;\n"
-"    printf(\"true\\n\"); goto L_PRINT_FIM;\n"
-"L_PRINT_STRING:\n" 
-"    cond = (v.tipo == TIPO_STRING); if (cond == 0) goto L_PRINT_FIM;\n"
-"    printf(\"%s\\n\", v.valor.v_string); goto L_PRINT_FIM;\n"
-"L_PRINT_FALSE:\n"
-"    printf(\"false\\n\");\n"
-"L_PRINT_FIM:\n"
-"    return;\n"
-"}\n"
-"\n"
-"Var input_dinamico() {\n"
-"    char buffer[1024];\n"
-"    int len;\n"
-"    char* endptr;\n"
-"    long val_int;\n"
-"    double val_float;\n"
-"\n"
-"    if (fgets(buffer, 1024, stdin) == NULL) buffer[0] = '\\0';\n"
-"\n"
-"    len = strlen(buffer);\n" //p tirar o \n do final
-"    if (len > 0 && buffer[len-1] == '\\n') { buffer[len-1] = '\\0'; len--; }\n"
-"    if (len > 0 && buffer[len-1] == '\\r') { buffer[len-1] = '\\0'; len--; }\n"
-"\n"
-"    if (strcmp(buffer, \"true\") == 0) return cria_bool(1);\n"
-"    if (strcmp(buffer, \"false\") == 0) return cria_bool(0);\n"
-"\n"
-"    val_int = strtol(buffer, &endptr, 10);\n"
-"    if (endptr != buffer && *endptr == '\\0') return cria_int((int)val_int);\n"
-"\n"
-"    val_float = strtod(buffer, &endptr);\n"
-"    if (endptr != buffer && *endptr == '\\0') return cria_float((float)val_float);\n"
-"\n"
-"    if (len == 1) return cria_char(buffer[0]);\n"
-"\n"
-"    return cria_string(buffer);\n"
-"}\n"
-"\n"
-"Var soma_dinamica(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"    char* tmp_str;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_int(a.valor.v_int + b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_float(a.valor.v_float + b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_float(a.valor.v_int + b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
-"    r = cria_float(a.valor.v_float + b.valor.v_int); goto FIM;\n"
-"L5: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
-"    tmp_str = (char*)malloc(strlen(a.valor.v_string) + strlen(b.valor.v_string) + 1);\n"
-"    strcpy(tmp_str, a.valor.v_string);\n"
-"    strcat(tmp_str, b.valor.v_string);\n"
-"    r = cria_string(tmp_str);\n"
-"    free(tmp_str); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"+\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var sub_dinamica(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_int(a.valor.v_int - b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_float(a.valor.v_float - b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_float(a.valor.v_int - b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_float(a.valor.v_float - b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"-\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var mult_dinamica(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_int(a.valor.v_int * b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_float(a.valor.v_float * b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_float(a.valor.v_int * b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_float(a.valor.v_float * b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"*\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var div_dinamica(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_int(a.valor.v_int / b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_float(a.valor.v_float / b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_float(a.valor.v_int / b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_float(a.valor.v_float / b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"/\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var igual_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int == b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float == b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int == b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
-"    r = cria_bool(a.valor.v_float == b.valor.v_int); goto FIM;\n"
-"L5: c = (a.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
-"    c = (b.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
-"    r = cria_bool(a.valor.v_char == b.valor.v_char); goto FIM;\n"
-"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
-"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
-"    r = cria_bool(a.valor.v_bool == b.valor.v_bool); goto FIM;\n"
-"L7: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
-"    c = strcmp(a.valor.v_string, b.valor.v_string);\n"
-"    r = cria_bool(c == 0); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"==\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var and_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_bool && b.valor.v_bool); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"&&\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var maior_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int > b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float > b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int > b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_float > b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\">\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var menor_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int < b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float < b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int < b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_float < b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"<\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var maior_igual_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int >= b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float >= b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int >= b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_float >= b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\">=\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var menor_igual_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int <= b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float <= b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int <= b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_float <= b.valor.v_int); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"<=\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var diferente_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
-"    r = cria_bool(a.valor.v_int != b.valor.v_int); goto FIM;\n"
-"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
-"    r = cria_bool(a.valor.v_float != b.valor.v_float); goto FIM;\n"
-"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
-"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
-"    r = cria_bool(a.valor.v_int != b.valor.v_float); goto FIM;\n"
-"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
-"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
-"    r = cria_bool(a.valor.v_float != b.valor.v_int); goto FIM;\n"
-"L5: c = (a.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
-"    c = (b.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
-"    r = cria_bool(a.valor.v_char != b.valor.v_char); goto FIM;\n"
-"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_bool != b.valor.v_bool); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"!=\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var or_dinamico(Var a, Var b) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(a.valor.v_bool || b.valor.v_bool); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"||\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n"
-"\n"
-"Var not_dinamico(Var a) {\n"
-"    Var r;\n"
-"    int c;\n"
-"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
-"    r = cria_bool(!a.valor.v_bool); goto FIM;\n"
-"L_ERR:\n"
-"    erro_runtime(\"!\");\n"
-"FIM:\n"
-"    return r;\n"
-"}\n";
+	"#include <stdio.h>\n"
+	"#include <stdlib.h>\n"
+	"#include <string.h>\n"
+
+	"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL, TIPO_STRING } TipoVar;\n"
+
+	// Estrutura de Dados Principal
+	"typedef struct {\n"
+		"    TipoVar tipo;\n"
+		"    union {\n"
+		"        int v_int;\n"
+		"        float v_float;\n"
+		"        char v_char;\n"
+		"        int v_bool;\n"
+		"        char* v_string;\n"
+		"    } valor;\n"
+	"} Var;\n"
+
+	// Funções que Criam Valores dos Tipos
+	"Var cria_int(int v) { Var res; res.tipo = TIPO_INT; res.valor.v_int = v; return res; }\n"
+	"Var cria_float(float v) { Var res; res.tipo = TIPO_FLOAT; res.valor.v_float = v; return res; }\n"
+	"Var cria_char(char v) { Var res; res.tipo = TIPO_CHAR; res.valor.v_char = v; return res; }\n"
+	"Var cria_bool(int v) { Var res; res.tipo = TIPO_BOOL; res.valor.v_bool = v; return res; }\n"
+	"\n"
+	"Var cria_string(const char* v) {\n"
+		"    Var res; res.tipo = TIPO_STRING;\n"
+		"    res.valor.v_string = (char*)malloc(strlen(v) + 1);\n"
+		"    strcpy(res.valor.v_string, v);\n"
+		"    return res;\n"
+	"}\n"
+	"\n"
+
+	// Função de Erro de Execução
+	"void erro_runtime(const char* operacao) {\n"
+		"    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
+		"    exit(1);\n"
+	"}\n"
+	"\n"
+
+	// Função que Verifica se a Variável é Considerada Verdadeira
+	"int eh_verdadeiro(Var v) {\n"
+		"    if (v.tipo == TIPO_BOOL) return v.valor.v_bool;\n"
+		"    if (v.tipo == TIPO_INT) return (v.valor.v_int != 0);\n"
+		"    if (v.tipo == TIPO_FLOAT) return (v.valor.v_float != 0.0);\n"
+		"    if (v.tipo == TIPO_STRING) return (strlen(v.valor.v_string) > 0);\n"
+		"    return 1;\n"
+	"}\n"
+	"\n"
+
+	// Função para Printar
+	"void print_dinamico(Var v) {\n"
+		"    int cond;\n"
+		"L_PRINT_INT:\n"
+		"    cond = (v.tipo == TIPO_INT); if (cond == 0) goto L_PRINT_FLOAT;\n"
+		"    printf(\"%d\\n\", v.valor.v_int); goto L_PRINT_FIM;\n"
+		"L_PRINT_FLOAT:\n"
+		"    cond = (v.tipo == TIPO_FLOAT); if (cond == 0) goto L_PRINT_CHAR;\n"
+		"    printf(\"%f\\n\", v.valor.v_float); goto L_PRINT_FIM;\n"
+		"L_PRINT_CHAR:\n"
+		"    cond = (v.tipo == TIPO_CHAR); if (cond == 0) goto L_PRINT_BOOL;\n"
+		"    printf(\"%c\\n\", v.valor.v_char); goto L_PRINT_FIM;\n"
+		"L_PRINT_BOOL:\n"
+		"    cond = (v.tipo == TIPO_BOOL); if (cond == 0) goto L_PRINT_STRING;\n"
+		"    cond = (v.valor.v_bool == 1); if (cond == 0) goto L_PRINT_FALSE;\n"
+		"    printf(\"true\\n\"); goto L_PRINT_FIM;\n"
+		"L_PRINT_STRING:\n" 
+		"    cond = (v.tipo == TIPO_STRING); if (cond == 0) goto L_PRINT_FIM;\n"
+		"    printf(\"%s\\n\", v.valor.v_string); goto L_PRINT_FIM;\n"
+		"L_PRINT_FALSE:\n"
+		"    printf(\"false\\n\");\n"
+		"L_PRINT_FIM:\n"
+		"    return;\n"
+	"}\n"
+	"\n"
+
+	// Função de Input
+	"Var input_dinamico() {\n"
+		"    char buffer[1024];\n"
+		"    int len;\n"
+		"    char* endptr;\n"
+		"    long val_int;\n"
+		"    double val_float;\n"
+		"\n"
+		"    if (fgets(buffer, 1024, stdin) == NULL) buffer[0] = '\\0';\n"
+		"\n"
+		"    len = strlen(buffer);\n" //p tirar o \n do final
+		"    if (len > 0 && buffer[len-1] == '\\n') { buffer[len-1] = '\\0'; len--; }\n"
+		"    if (len > 0 && buffer[len-1] == '\\r') { buffer[len-1] = '\\0'; len--; }\n"
+		"\n"
+		"    if (strcmp(buffer, \"true\") == 0) return cria_bool(1);\n"
+		"    if (strcmp(buffer, \"false\") == 0) return cria_bool(0);\n"
+		"\n"
+		"    val_int = strtol(buffer, &endptr, 10);\n"
+		"    if (endptr != buffer && *endptr == '\\0') return cria_int((int)val_int);\n"
+		"\n"
+		"    val_float = strtod(buffer, &endptr);\n"
+		"    if (endptr != buffer && *endptr == '\\0') return cria_float((float)val_float);\n"
+		"\n"
+		"    if (len == 1) return cria_char(buffer[0]);\n"
+		"\n"
+		"    return cria_string(buffer);\n"
+		"}\n"
+	"\n"
+
+	// Função de Soma
+	"Var soma_dinamica(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"    char* tmp_str;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_int(a.valor.v_int + b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_float(a.valor.v_float + b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_float(a.valor.v_int + b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
+		"    r = cria_float(a.valor.v_float + b.valor.v_int); goto FIM;\n"
+		"L5: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+		"    tmp_str = (char*)malloc(strlen(a.valor.v_string) + strlen(b.valor.v_string) + 1);\n"
+		"    strcpy(tmp_str, a.valor.v_string);\n"
+		"    strcat(tmp_str, b.valor.v_string);\n"
+		"    r = cria_string(tmp_str);\n"
+		"    free(tmp_str); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"+\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de Subtração
+	"Var sub_dinamica(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_int(a.valor.v_int - b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_float(a.valor.v_float - b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_float(a.valor.v_int - b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_float(a.valor.v_float - b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"-\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de Multiplicação
+	"Var mult_dinamica(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_int(a.valor.v_int * b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_float(a.valor.v_float * b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_float(a.valor.v_int * b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_float(a.valor.v_float * b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"*\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de Divisão
+	"Var div_dinamica(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_int(a.valor.v_int / b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_float(a.valor.v_float / b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_float(a.valor.v_int / b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_float(a.valor.v_float / b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"/\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de ==
+	"Var igual_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int == b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float == b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int == b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
+		"    r = cria_bool(a.valor.v_float == b.valor.v_int); goto FIM;\n"
+		"L5: c = (a.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
+		"    c = (b.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
+		"    r = cria_bool(a.valor.v_char == b.valor.v_char); goto FIM;\n"
+		"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
+		"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L7;\n"
+		"    r = cria_bool(a.valor.v_bool == b.valor.v_bool); goto FIM;\n"
+		"L7: c = (a.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_STRING); if (c == 0) goto L_ERR;\n"
+		"    c = strcmp(a.valor.v_string, b.valor.v_string);\n"
+		"    r = cria_bool(c == 0); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"==\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de &&
+	"Var and_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_bool && b.valor.v_bool); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"&&\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de >
+	"Var maior_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int > b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float > b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int > b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_float > b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\">\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de <
+	"Var menor_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int < b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float < b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int < b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_float < b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"<\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de >=
+	"Var maior_igual_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int >= b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float >= b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int >= b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_float >= b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\">=\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de <=
+	"Var menor_igual_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int <= b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float <= b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int <= b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_float <= b.valor.v_int); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"<=\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de !=
+	"Var diferente_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L2;\n"
+		"    r = cria_bool(a.valor.v_int != b.valor.v_int); goto FIM;\n"
+		"L2: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L3;\n"
+		"    r = cria_bool(a.valor.v_float != b.valor.v_float); goto FIM;\n"
+		"L3: c = (a.tipo == TIPO_INT); if (c == 0) goto L4;\n"
+		"    c = (b.tipo == TIPO_FLOAT); if (c == 0) goto L4;\n"
+		"    r = cria_bool(a.valor.v_int != b.valor.v_float); goto FIM;\n"
+		"L4: c = (a.tipo == TIPO_FLOAT); if (c == 0) goto L5;\n"
+		"    c = (b.tipo == TIPO_INT); if (c == 0) goto L5;\n"
+		"    r = cria_bool(a.valor.v_float != b.valor.v_int); goto FIM;\n"
+		"L5: c = (a.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
+		"    c = (b.tipo == TIPO_CHAR); if (c == 0) goto L6;\n"
+		"    r = cria_bool(a.valor.v_char != b.valor.v_char); goto FIM;\n"
+		"L6: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_bool != b.valor.v_bool); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"!=\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de ||
+	"Var or_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    c = (b.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(a.valor.v_bool || b.valor.v_bool); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"||\");\n"
+		"FIM:\n"
+		"    return r;\n"
+		"}\n"
+		"\n"
+		"Var not_dinamico(Var a) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"L1: c = (a.tipo == TIPO_BOOL); if (c == 0) goto L_ERR;\n"
+		"    r = cria_bool(!a.valor.v_bool); goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"!\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n";
 
 %}
 
@@ -415,9 +452,11 @@ string runtime_c =
 %token TK_BOOL
 %token TK_STRING
 
+// Entrada e Saída
 %token TK_PRINT
 %token TK_INPUT
 
+// Comandos
 %token TK_IF TK_ELSE TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
 %token TK_IN TK_TO TK_INC
 
@@ -476,20 +515,13 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
-	/* regra isolada de atribuicao, q o FOR e o CMD vao usar */
-ATRIB		: TK_ID '=' E
+	/* Comando */
+CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				registrar_variavel($1.label);
 				$$.traducao = $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
-			;
-
-	/* Comando */
-CMD			: ATRIB TK_NEWLINE
-			{
-				$$.traducao = $1.traducao;
-			}
-			//absorve linhas sobrando no codigo (no final dele)
+			// Absorve linhas sobrando no código
 			| TK_NEWLINE
 			{
 				$$.traducao = ""; 
@@ -503,7 +535,7 @@ CMD			: ATRIB TK_NEWLINE
                 $$.traducao = $1.traducao;
 			}
 
-			/* x++ */
+	/* x++ */
 			| TK_ID TK_INC TK_NEWLINE
 			{
 				registrar_variavel($1.label);
@@ -514,7 +546,7 @@ CMD			: ATRIB TK_NEWLINE
 							  "\t" + $1.label + " = soma_dinamica(" + $1.label + ", " + temp_um + ");\n";
 			}
 
-			/* if isolado */
+	/* if isolado */
 			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 			{
 				string l_fim = gen_label();
@@ -524,7 +556,7 @@ CMD			: ATRIB TK_NEWLINE
 							  l_fim + ":\n";
 			}
 
-			/* if else */
+	/* if else */
 			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT TK_ELSE ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 			{
 				string l_falso = gen_label();
@@ -538,7 +570,7 @@ CMD			: ATRIB TK_NEWLINE
 							  l_fim + ":\n";
 			}
 
-			/* while */
+	/* while */
 			| TK_WHILE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 			{
 				string l_inicio = gen_label();
@@ -588,7 +620,7 @@ CMD			: ATRIB TK_NEWLINE
 							  l_fim + ":\n";
 			}
 
-	/* switch case (basicametne uma cascata de ifs */
+	/* switch case (basicamente uma cascata de ifs) */
 			| TK_SWITCH E ':' TK_NEWLINE TK_INDENT 
 			{ 
 				switch_var_stack.push($2.label); 
@@ -640,7 +672,7 @@ DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 			}
 			;
 
-/* Expressão 		*/
+	/* Expressão 			*/
 	/* Identificador		*/
 E 			: TK_ID
 			{
@@ -791,8 +823,6 @@ E 			: TK_ID
 %%
 
 #include "lex.yy.c"
-
-
 
 int yyparse();
 

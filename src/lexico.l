@@ -8,7 +8,6 @@ using namespace std;
 stack<int> pilhas_indentacao;
 int dedents_pendentes = 0;
 bool inicio_configurado = false;
-
 bool enter_eof_emitido = false;
 
 %}
@@ -25,7 +24,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 %%
 
     /*
-    exemplo do esquema de tabulaçao por identaçao:
+    exemplo do esquema de bloco por indentaçao:
 
     print("inicio")
     if (teste):
@@ -113,24 +112,32 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 [ \t]+          { }
 
-
-        /*          Tipos          */
+    /*         boolean         */
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
 
+    /*     entrada e saída     */
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
+    /*         if-else         */
 "if"        { return TK_IF; }
 "else"      { return TK_ELSE; }
+
+    /*        do e while       */
 "while"     { return TK_WHILE; }
 "do"        { return TK_DO; }
+
+    /*         switch          */
 "switch"    { return TK_SWITCH; }
 "case"      { return TK_CASE; }
-"default"   { return TK_DEFAULT; } 
+"default"   { return TK_DEFAULT; }
 
+    /*           For           */
 "for"       { return TK_FOR; }
 "in"        { return TK_IN; }
 "to"        { return TK_TO; }
+
+    /*        Incremento       */
 "++"        { return TK_INC; }
 
     /* Números e Identificador */
@@ -141,7 +148,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /*          Char           */
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
 
-    /*          String           */
+    /*          String         */
 \"[^\"]*\"  { yylval.label = yytext; return TK_STRING; }
 
     /*   Atribuição e ;        */
@@ -175,7 +182,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 .			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
-    /* garante que todos os blocos abertos sejam fechados */
+    /* Garante que todos os blocos abertos sejam fechados */
 <<EOF>> {
 
         // lança uma linha (enter) antes de qualquer coisa para fechar a ultima linha
