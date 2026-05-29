@@ -112,6 +112,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 [ \t]+          { }
 
+    /*    Variáveis Globais e Locais   */
+"global"    { return TK_GLOBAL; }
+"local"     { return TK_LOCAL;    }
+
     /*         boolean         */
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
 
@@ -141,6 +145,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /*     break e continue    */
 "break"     { return TK_BREAK;    }
 "continue"  { return TK_CONTINUE; }
+
     /*        Incremento       */
 "++"        { return TK_INC; }
 

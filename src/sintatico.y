@@ -36,6 +36,7 @@ struct Simbolo {
 };
 
 vector<string> variaveis_declaradas;
+vector<string> variaveis_globais;
 vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
 
 int yylex(void);
@@ -61,6 +62,43 @@ void registrar_variavel(string nome) {
 		}
 
 	if (!ja_existe) {
+		Simbolo s;
+		s.label = "var_" + to_string(id_escopo) + "_" + nome;
+
+		pilha_tabela_simbolos.back()[nome] = s;
+		variaveis_declaradas.push_back(s.label);
+	}
+}
+
+void registrar_variavel_global(string nome) {
+	if (!pilha_tabela_simbolos.front().count(nome)) {
+		Simbolo s;
+		s.label = "global_" + nome;
+
+		// Injeta na base da pilha (escopo 0) para que ela não morra 
+		// quando o bloco atual terminar.
+		pilha_tabela_simbolos.front()[nome] = s;
+	
+		// Adiciona no vetor de globais
+		variaveis_declaradas.push_back(s.label);
+	}
+
+	// Salva no vetor de globais (verificando para não duplicar)
+    bool ja_existe = false;
+    for (string g : variaveis_globais) {
+        if (g == nome) {
+            ja_existe = true;
+            break;
+        }
+    }
+
+    if (!ja_existe) {
+        variaveis_globais.push_back(nome);
+    }
+}
+
+void registrar_variavel_local(string nome) {	
+	if (!pilha_tabela_simbolos.back().count(nome)) {
 		Simbolo s;
 		s.label = "var_" + to_string(id_escopo) + "_" + nome;
 
@@ -579,6 +617,10 @@ string runtime_c =
 %token TK_IN TK_TO TK_INC
 %token TK_BREAK TK_CONTINUE
 
+// Variável GLobal e Local
+%token TK_GLOBAL
+%token TK_LOCAL
+
 // Identificador
 %token TK_ID
 
@@ -707,6 +749,20 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			| E TK_NEWLINE
 			{
                 $$.traducao = $1.traducao;
+			}
+
+	/*	Variáveis Globais   */
+			| TK_GLOBAL TK_ID TK_NEWLINE
+			{
+				registrar_variavel_global($2.label);
+				$$.traducao = "";
+			}
+
+	/*    Variável Local    */		
+			| TK_LOCAL TK_ID TK_NEWLINE
+			{
+				registrar_variavel_local($2.label);
+				$$.traducao = "";
 			}
 
 	/* x++ */
