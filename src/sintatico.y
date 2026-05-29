@@ -121,7 +121,7 @@ Simbolo buscar_Simbolo(string nome) {
 string runtime_c = 
 	"#include <stdio.h>\n"
 	"#include <stdlib.h>\n"
-	"#include <string.h>\n"
+	"#include <string.h>\n\n"
 
 	// Função de Leitura para String Dinâmica
 	"int lenstr(const char* str) {\n"
@@ -676,8 +676,15 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
-	/* Prefixo do IF para evitar conflito Reduce/Reduce */
-IF_PREFIXO	: TK_IF E ':' TK_NEWLINE TK_INDENT
+	/* Bloco aceita Indentação ou Chaves */
+BLOCO		: TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT 
+			{ 
+				$$.traducao = $3.traducao; 
+			}
+			;
+
+	/* Prefixo do IF, evita possíveis conflitos futuros */
+IF_PREFIXO	: TK_IF E ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
@@ -686,8 +693,9 @@ IF_PREFIXO	: TK_IF E ':' TK_NEWLINE TK_INDENT
 				$$.traducao = $2.traducao; 
 			}
 			;
+
 	/* Prefixo do ELIF (Abre o escopo e evita possíveis conflitos futuros) */
-ELIF_PREFIXO: TK_ELIF E ':' TK_NEWLINE TK_INDENT
+ELIF_PREFIXO: TK_ELIF E ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
@@ -698,7 +706,7 @@ ELIF_PREFIXO: TK_ELIF E ':' TK_NEWLINE TK_INDENT
 			;
 	
 	/* Cascata de alternativas: Pode ser vários ELIFs, um ELSE no final, ou nada */
-BLOCOS_ALTERNATIVOS : ELIF_PREFIXO LISTA_COMANDOS TK_DEDENT
+BLOCOS_ALTERNATIVOS : ELIF_PREFIXO BLOCO
 					{
 						pilha_tabela_simbolos.pop_back();
 					}
@@ -712,17 +720,17 @@ BLOCOS_ALTERNATIVOS : ELIF_PREFIXO LISTA_COMANDOS TK_DEDENT
 									  $2.traducao + // Comandos deste ELIF
 									  "\tgoto " + l_fim + ";\n" +
 									  l_falso + ":\n" +
-									  $5.traducao; // Próximos ELIFs ou ELSE
+									  $4.traducao; // Próximos ELIFs ou ELSE
 					}
-					| TK_ELSE ':' TK_NEWLINE TK_INDENT
+					| TK_ELSE ':'
 					{
 						pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 						id_escopo++;
 					}
-					LISTA_COMANDOS TK_DEDENT
+					BLOCO
 					{
 						pilha_tabela_simbolos.pop_back();
-						$$.traducao = $6.traducao; // O else só joga a tradução pra cima
+						$$.traducao = $4.traducao; // O else só joga a tradução pra cima
 					}
 					| /* Vazio (Encerra a cascata) */
 					{
@@ -765,6 +773,33 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = "";
 			}
 
+	/* Bloco Anônimo por Identação */
+			| TK_INDENT 
+			{
+				// Abre um escopo temporário para o bloco solto
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				// Fecha o escopo temporário
+				pilha_tabela_simbolos.pop_back();
+
+				$$.traducao = $3.traducao; 
+			}
+
+	/* Bloco Anônimo por Chaves   */
+			| '{' 
+			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS '}'
+			{
+				pilha_tabela_simbolos.pop_back();
+				$$.traducao = $3.traducao; 
+			}
+
 	/* x++ */
 			| TK_ID TK_INC TK_NEWLINE
 			{
@@ -799,7 +834,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			}
 
 	/* if Genérico (Absorve if isolado, if-else, if-elif-else) */
-			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT 
+			| IF_PREFIXO BLOCO 
 			{
 				pilha_tabela_simbolos.pop_back();
 				elif_fim_stack.push(gen_label());
@@ -815,12 +850,12 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  $2.traducao + // Comandos do IF principal
 							  "\tgoto " + l_fim + ";\n" +
 							  l_falso + ":\n" +
-							  $5.traducao + // Toda a cascata de ELIFs e ELSE
+							  $4.traducao + // Toda a cascata de ELIFs e ELSE
 							  l_fim + ":\n";
 			}
 
 	/* while */
-			| TK_WHILE E ':' TK_NEWLINE TK_INDENT 
+			| TK_WHILE E ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
@@ -829,7 +864,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				loop_break_stack.push(gen_label());
 				loop_continue_stack.push(gen_label());
 			}
-			LISTA_COMANDOS TK_DEDENT
+			BLOCO
 			{
 				pilha_tabela_simbolos.pop_back();
 
@@ -841,13 +876,13 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = l_inicio + ":\n" +
 							  $2.traducao +
 							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
-							  $7.traducao +
+							  $5.traducao +
 							  "\tgoto " + l_inicio + ";\n" +
 							  l_fim + ":\n";
 			}
 
 	/* do while (executa o bloco e testa se eh true no final) */
-			| TK_DO ':' TK_NEWLINE TK_INDENT 
+			| TK_DO ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
@@ -856,7 +891,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				loop_break_stack.push(gen_label());
 				loop_continue_stack.push(gen_label());
 			}	
-			LISTA_COMANDOS TK_DEDENT TK_WHILE E TK_NEWLINE
+			BLOCO TK_WHILE E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.pop_back();
 
@@ -867,15 +902,15 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				loop_break_stack.pop();
 
 				$$.traducao = l_inicio + ":\n" +
-							  $6.traducao +
+							  $4.traducao +
 							  l_continue + ":\n" +
-							  $9.traducao +
-							  "\tif (eh_verdadeiro(" + $9.label + ") != 0) goto " + l_inicio + ";\n" +
+							  $6.traducao +
+							  "\tif (eh_verdadeiro(" + $6.label + ") != 0) goto " + l_inicio + ";\n" +
 							  l_fim + ":\n";
 			}
 
 	/* for i in x to y: */
-			| TK_FOR TK_ID TK_IN E TK_TO E ':' TK_NEWLINE TK_INDENT 
+			| TK_FOR TK_ID TK_IN E TK_TO E ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
@@ -887,7 +922,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				loop_break_stack.push(gen_label());
 				loop_continue_stack.push(gen_label());
 			}
-			LISTA_COMANDOS TK_DEDENT
+			BLOCO
 			{
 				// Busca Simbolo de i
 				Simbolo s;
@@ -916,7 +951,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  $6.traducao + // avalia o teto (y)
 							  "\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 							  "\tif (eh_verdadeiro(" + temp_cond + ") == 0) goto " + l_fim + ";\n" +
-							  $11.traducao + // corpo do for
+							  $9.traducao + // corpo do for
 							  l_continue + ":\n" + 
 							  "\t" + temp_um + " = cria_int(1);\n" + 
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" + // i = i+1
@@ -925,20 +960,26 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			}
 
 	/* switch case (basicamente uma cascata de ifs) */
-			| TK_SWITCH E ':' TK_NEWLINE TK_INDENT 
+			| TK_SWITCH E ':'
 			{ 
 				switch_var_stack.push($2.label); 
 				switch_fim_stack.push(gen_label()); 
 			} 
-			LISTA_CASOS TK_DEDENT
+			BLOCO_CASOS
 			{
-				$$.traducao = $2.traducao + $7.traducao + switch_fim_stack.top() + ":\n";
+				$$.traducao = $2.traducao + $5.traducao + switch_fim_stack.top() + ":\n";
 				switch_var_stack.pop();
 				switch_fim_stack.pop();
 			}
 		    ;
 
 	/* regras relacionadas ao switch */
+BLOCO_CASOS	: TK_NEWLINE TK_INDENT LISTA_CASOS TK_DEDENT 
+			{ 
+				$$.traducao = $3.traducao;
+			}
+			;
+
 LISTA_CASOS	: CASO LISTA_CASOS 
 			{ 
 				$$.traducao = $1.traducao + $2.traducao; 
@@ -953,12 +994,12 @@ LISTA_CASOS	: CASO LISTA_CASOS
 			}
 			;
 
-CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT 
+CASO		: TK_CASE E ':'
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 			}
-			LISTA_COMANDOS TK_DEDENT
+			BLOCO
 			{
 				pilha_tabela_simbolos.pop_back();
 
@@ -970,23 +1011,23 @@ CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT
 				$$.traducao = $2.traducao +
 							  "\t" + var_teste + " = igual_dinamico(" + var_switch + ", " + $2.label + ");\n" +
 							  "\tif (eh_verdadeiro(" + var_teste + ") == 0) goto " + l_prox_caso + ";\n" +
-							  $7.traducao +
+							  $5.traducao +
 							  "\tgoto " + l_fim + ";\n" +
 							  l_prox_caso + ":\n";
 			}
 			;
 
-DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT 
+DEFAULT		: TK_DEFAULT ':' 
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 			}
-			LISTA_COMANDOS TK_DEDENT
+			BLOCO
 			{
 				pilha_tabela_simbolos.pop_back();
 			
 				string l_fim = switch_fim_stack.top();
-				$$.traducao = $6.traducao + "\tgoto " + l_fim + ";\n";
+				$$.traducao = $4.traducao + "\tgoto " + l_fim + ";\n";
 			}
 			;
 

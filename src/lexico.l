@@ -90,7 +90,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 <CHECK_INDENT>. {
     yyless(0); 
     BEGIN(INITIAL); 
-    
+
     int indentacao_atual = 0;
     if (indentacao_atual < pilhas_indentacao.top()) {
         while (pilhas_indentacao.top() > indentacao_atual) {
@@ -184,6 +184,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "&&"                { return TK_AND; }
 "||"                { return TK_OR;  }
 "!"                 { return '!';    } 
+
+    /*    Chaves de Blocos     */
+"{"                 { return '{'; }
+"}"                 { return '}'; }
 
     /*       Parênteses        */
 "("                 { return '('; }
