@@ -18,6 +18,8 @@ string codigo_gerado;
 stack<string> switch_var_stack;
 stack<string> switch_fim_stack;
 
+stack<string> elif_fim_stack;
+
 struct atributos {
 	string label;
 	string traducao;
@@ -567,7 +569,7 @@ string runtime_c =
 %token TK_INPUT
 
 // Comandos
-%token TK_IF TK_ELSE TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
+%token TK_IF TK_ELSE TK_ELIF TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
 %token TK_IN TK_TO TK_INC
 
 // Identificador
@@ -635,6 +637,49 @@ IF_PREFIXO	: TK_IF E ':' TK_NEWLINE TK_INDENT
 				$$.traducao = $2.traducao; 
 			}
 			;
+	/* Prefixo do ELIF (Abre o escopo e evita possíveis conflitos futuros) */
+ELIF_PREFIXO: TK_ELIF E ':' TK_NEWLINE TK_INDENT
+			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+				
+				$$.label = $2.label;
+				$$.traducao = $2.traducao;
+			}
+			;
+	
+	/* Cascata de alternativas: Pode ser vários ELIFs, um ELSE no final, ou nada */
+BLOCOS_ALTERNATIVOS : ELIF_PREFIXO LISTA_COMANDOS TK_DEDENT
+					{
+						pilha_tabela_simbolos.pop_back();
+					}
+					BLOCOS_ALTERNATIVOS
+					{
+						string l_falso = gen_label();
+						string l_fim = elif_fim_stack.top(); // Pega o label de fim
+
+						$$.traducao = $1.traducao + 
+									  "\tif (eh_verdadeiro(" + $1.label + ") == 0) goto " + l_falso + ";\n" +
+									  $2.traducao + // Comandos deste ELIF
+									  "\tgoto " + l_fim + ";\n" +
+									  l_falso + ":\n" +
+									  $5.traducao; // Próximos ELIFs ou ELSE
+					}
+					| TK_ELSE ':' TK_NEWLINE TK_INDENT
+					{
+						pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+						id_escopo++;
+					}
+					LISTA_COMANDOS TK_DEDENT
+					{
+						pilha_tabela_simbolos.pop_back();
+						$$.traducao = $6.traducao; // O else só joga a tradução pra cima
+					}
+					| /* Vazio (Encerra a cascata) */
+					{
+						$$.traducao = "";
+					}
+					;
 
 	/* Comando */
 CMD			: TK_ID '=' E TK_NEWLINE
@@ -670,41 +715,27 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
-	/* if isolado */
-			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT
+	/* if Genérico (Absorve if isolado, if-else, if-elif-else) */
+			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT 
 			{
 				pilha_tabela_simbolos.pop_back();
-
-				string l_fim = gen_label();
-				$$.traducao = $1.traducao + 
-							  "\tif (eh_verdadeiro(" + $1.label + ") == 0) goto " + l_fim + ";\n" +
-							  $2.traducao +
-							  l_fim + ":\n";
+				elif_fim_stack.push(gen_label());
 			}
-
-	/* if-else */
-			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT TK_ELSE ':' TK_NEWLINE TK_INDENT
+			BLOCOS_ALTERNATIVOS
 			{
-				// Fecha o escopo do IF e abre o do ELSE
-				pilha_tabela_simbolos.pop_back();
-				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
-				id_escopo++;
-			}
-			LISTA_COMANDOS TK_DEDENT
-			{
-				pilha_tabela_simbolos.pop_back();
-
 				string l_falso = gen_label();
-				string l_fim = gen_label();
+				string l_fim = elif_fim_stack.top(); // Resgata o label de fim
+				elif_fim_stack.pop(); // Limpa a pilha
+
 				$$.traducao = $1.traducao + 
 							  "\tif (eh_verdadeiro(" + $1.label + ") == 0) goto " + l_falso + ";\n" +
-							  $2.traducao + // COMANDOS IF
+							  $2.traducao + // Comandos do IF principal
 							  "\tgoto " + l_fim + ";\n" +
 							  l_falso + ":\n" +
-							  $9.traducao + // COMANDOS ELSE
+							  $5.traducao + // Toda a cascata de ELIFs e ELSE
 							  l_fim + ":\n";
 			}
-	
+
 	/* while */
 			| TK_WHILE E ':' TK_NEWLINE TK_INDENT 
 			{

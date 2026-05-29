@@ -119,31 +119,32 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
-    /*         if-else         */
-"if"        { return TK_IF; }
+    /*         if-elif-else         */
+"if"        { return TK_IF;   }
 "else"      { return TK_ELSE; }
+"elif"      { return TK_ELIF; }
 
     /*        do e while       */
 "while"     { return TK_WHILE; }
-"do"        { return TK_DO; }
+"do"        { return TK_DO;    }
 
     /*         switch          */
-"switch"    { return TK_SWITCH; }
-"case"      { return TK_CASE; }
+"switch"    { return TK_SWITCH;  }
+"case"      { return TK_CASE;    }
 "default"   { return TK_DEFAULT; }
 
     /*           For           */
 "for"       { return TK_FOR; }
-"in"        { return TK_IN; }
-"to"        { return TK_TO; }
+"in"        { return TK_IN;  }
+"to"        { return TK_TO;  }
 
     /*        Incremento       */
 "++"        { return TK_INC; }
 
     /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
-{INT}		{ yylval.label = yytext; return TK_INT; }
-{ID}        { yylval.label = yytext; return TK_ID; }
+{INT}		{ yylval.label = yytext; return TK_INT;   }
+{ID}        { yylval.label = yytext; return TK_ID;    }
 
     /*          Char           */
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
