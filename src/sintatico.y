@@ -12,10 +12,8 @@ using namespace std;
 int var_temp_qnt;
 int label_qnt = 0;
 int linha = 1;
+int id_escopo = 0;
 string codigo_gerado;
-
-vector<string> variaveis_declaradas;
-unordered_map<string, bool> tabela_simbolos;
 
 stack<string> switch_var_stack;
 stack<string> switch_fim_stack;
@@ -24,6 +22,16 @@ struct atributos {
 	string label;
 	string traducao;
 };
+
+struct Simbolo {
+	string label;
+};
+
+vector<string> variaveis_declaradas;
+vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
+
+int yylex(void);
+void yyerror(string);
 
 string gentempcode() {
 	var_temp_qnt++;
@@ -36,14 +44,32 @@ string gen_label() {
 }
 
 void registrar_variavel(string nome) {
-	if (!tabela_simbolos.count(nome)) {
-		tabela_simbolos[nome] = true;
-		variaveis_declaradas.push_back(nome);
+	bool ja_existe = false;
+
+	for (auto tabela_simbolos = pilha_tabela_simbolos.rbegin(); tabela_simbolos != pilha_tabela_simbolos.rend(); ++tabela_simbolos)
+		if (tabela_simbolos->count(nome)) {
+			ja_existe = true;
+			break;
+		}
+
+	if (!ja_existe) {
+		Simbolo s;
+		s.label = "var_" + to_string(id_escopo) + "_" + nome;
+
+		pilha_tabela_simbolos.back()[nome] = s;
+		variaveis_declaradas.push_back(s.label);
 	}
 }
 
-int yylex(void);
-void yyerror(string);
+Simbolo buscar_Simbolo(string nome) {
+	for (auto tabela_simbolos = pilha_tabela_simbolos.rbegin(); tabela_simbolos != pilha_tabela_simbolos.rend(); ++tabela_simbolos)
+		if (tabela_simbolos->count(nome)) {
+			return tabela_simbolos->at(nome);
+		}
+	yyerror("Erro Semantico: Variavel '" + nome + "' nao inicializada.");
+	exit(1);
+	
+}
 
 //codigo c q vai no final
 string runtime_c = 
@@ -599,11 +625,23 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
+	/* Prefixo do IF para evitar conflito Reduce/Reduce */
+IF_PREFIXO	: TK_IF E ':' TK_NEWLINE TK_INDENT
+			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+
+				$$.label = $2.label;
+				$$.traducao = $2.traducao; 
+			}
+			;
+
 	/* Comando */
 CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				registrar_variavel($1.label);
-				$$.traducao = $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.traducao = $3.traducao + "\t" + s.label + " = " + $3.label + ";\n";
 			}
 			// Absorve linhas sobrando no código
 			| TK_NEWLINE
@@ -625,81 +663,119 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				registrar_variavel($1.label);
 				string temp_um = gentempcode();
 				
+				Simbolo s = buscar_Simbolo($1.label);
+
 				// TAC: x = soma_dinamica(x, 1);
 				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
-							  "\t" + $1.label + " = soma_dinamica(" + $1.label + ", " + temp_um + ");\n";
+							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
 	/* if isolado */
-			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT
 			{
+				pilha_tabela_simbolos.pop_back();
+
 				string l_fim = gen_label();
-				$$.traducao = $2.traducao + 
-							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
-							  $6.traducao +
+				$$.traducao = $1.traducao + 
+							  "\tif (eh_verdadeiro(" + $1.label + ") == 0) goto " + l_fim + ";\n" +
+							  $2.traducao +
 							  l_fim + ":\n";
 			}
 
-	/* if else */
-			| TK_IF E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT TK_ELSE ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+	/* if-else */
+			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT TK_ELSE ':' TK_NEWLINE TK_INDENT
 			{
+				// Fecha o escopo do IF e abre o do ELSE
+				pilha_tabela_simbolos.pop_back();
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				pilha_tabela_simbolos.pop_back();
+
 				string l_falso = gen_label();
 				string l_fim = gen_label();
-				$$.traducao = $2.traducao + 
-							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_falso + ";\n" +
-							  $6.traducao +
+				$$.traducao = $1.traducao + 
+							  "\tif (eh_verdadeiro(" + $1.label + ") == 0) goto " + l_falso + ";\n" +
+							  $2.traducao + // COMANDOS IF
 							  "\tgoto " + l_fim + ";\n" +
 							  l_falso + ":\n" +
-							  $12.traducao +
+							  $9.traducao + // COMANDOS ELSE
 							  l_fim + ":\n";
 			}
-
+	
 	/* while */
-			| TK_WHILE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			| TK_WHILE E ':' TK_NEWLINE TK_INDENT 
 			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				pilha_tabela_simbolos.pop_back();
+
 				string l_inicio = gen_label();
 				string l_fim = gen_label();
 				$$.traducao = l_inicio + ":\n" +
 							  $2.traducao +
 							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
-							  $6.traducao +
+							  $7.traducao +
 							  "\tgoto " + l_inicio + ";\n" +
 							  l_fim + ":\n";
 			}
 
 	/* do while (executa o bloco e testa se eh true no final) */
-			| TK_DO ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT TK_WHILE E TK_NEWLINE
+			| TK_DO ':' TK_NEWLINE TK_INDENT 
 			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT TK_WHILE E TK_NEWLINE
+			{
+				pilha_tabela_simbolos.pop_back();
+
 				string l_inicio = gen_label();
 				$$.traducao = l_inicio + ":\n" +
-							  $5.traducao +
-							  $8.traducao +
-							  "\tif (eh_verdadeiro(" + $8.label + ") != 0) goto " + l_inicio + ";\n";
+							  $6.traducao +
+							  $9.traducao +
+							  "\tif (eh_verdadeiro(" + $9.label + ") != 0) goto " + l_inicio + ";\n";
 			}
 
 	/* for i in x to y: */
-			| TK_FOR TK_ID TK_IN E TK_TO E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			| TK_FOR TK_ID TK_IN E TK_TO E ':' TK_NEWLINE TK_INDENT 
 			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+
+				// registra a variavel iteradora (i)
+				registrar_variavel($2.label);				
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				// Busca Simbolo de i
+				Simbolo s;
+				s = buscar_Simbolo($2.label);
+				
+				pilha_tabela_simbolos.pop_back();
+
 				string l_inicio = gen_label();
 				string l_fim = gen_label();
 				string temp_cond = gentempcode();
 				string temp_um = gentempcode();
 				
-				// registra a variavel iteradora (i)
-				registrar_variavel($2.label);
-				
 				// inicializa i com o valor de x
-				string trad_init = $4.traducao + "\t" + $2.label + " = " + $4.label + ";\n";
+				string trad_init = $4.traducao + "\t" + s.label + " = " + $4.label + ";\n";
 				
 				// monta o laço
 				$$.traducao = trad_init + 
 							  l_inicio + ":\n" +
 							  $6.traducao + // avalia o teto (y)
-							  "\t" + temp_cond + " = menor_igual_dinamico(" + $2.label + ", " + $6.label + ");\n" +
+							  "\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 							  "\tif (eh_verdadeiro(" + temp_cond + ") == 0) goto " + l_fim + ";\n" +
-							  $10.traducao + // corpo do for
+							  $11.traducao + // corpo do for
 							  "\t" + temp_um + " = cria_int(1);\n" + 
-							  "\t" + $2.label + " = soma_dinamica(" + $2.label + ", " + temp_um + ");\n" + // i = i+1
+							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" + // i = i+1
 							  "\tgoto " + l_inicio + ";\n" +
 							  l_fim + ":\n";
 			}
@@ -718,7 +794,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			}
 		    ;
 
-/* regras relacionadas ao switch */
+	/* regras relacionadas ao switch */
 LISTA_CASOS	: CASO LISTA_CASOS 
 			{ 
 				$$.traducao = $1.traducao + $2.traducao; 
@@ -733,8 +809,15 @@ LISTA_CASOS	: CASO LISTA_CASOS
 			}
 			;
 
-CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT 
 			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				pilha_tabela_simbolos.pop_back();
+
 				string l_prox_caso = gen_label();
 				string var_switch = switch_var_stack.top();
 				string l_fim = switch_fim_stack.top();
@@ -743,16 +826,23 @@ CASO		: TK_CASE E ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 				$$.traducao = $2.traducao +
 							  "\t" + var_teste + " = igual_dinamico(" + var_switch + ", " + $2.label + ");\n" +
 							  "\tif (eh_verdadeiro(" + var_teste + ") == 0) goto " + l_prox_caso + ";\n" +
-							  $6.traducao +
+							  $7.traducao +
 							  "\tgoto " + l_fim + ";\n" +
 							  l_prox_caso + ":\n";
 			}
 			;
 
-DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT 
 			{
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+			}
+			LISTA_COMANDOS TK_DEDENT
+			{
+				pilha_tabela_simbolos.pop_back();
+			
 				string l_fim = switch_fim_stack.top();
-				$$.traducao = $5.traducao + "\tgoto " + l_fim + ";\n";
+				$$.traducao = $6.traducao + "\tgoto " + l_fim + ";\n";
 			}
 			;
 
@@ -760,8 +850,9 @@ DEFAULT		: TK_DEFAULT ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 	/* Identificador		*/
 E 			: TK_ID
 			{
-				$$.label = gentempcode();
-				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.label = s.label;
+				$$.traducao = "";
 			}
 	
 	/*		  Literais			*/
@@ -912,6 +1003,8 @@ int yyparse();
 
 int main(int argc, char* argv[]) {
 	var_temp_qnt = 0;
+
+	pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 
 	if (yyparse() == 0)
 		cout << codigo_gerado;
