@@ -119,7 +119,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
-    /*         if-elif-else         */
+    /*         if-elif-else    */
 "if"        { return TK_IF;   }
 "else"      { return TK_ELSE; }
 "elif"      { return TK_ELIF; }
@@ -133,11 +133,14 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "case"      { return TK_CASE;    }
 "default"   { return TK_DEFAULT; }
 
-    /*           For           */
+    /*           for           */
 "for"       { return TK_FOR; }
 "in"        { return TK_IN;  }
 "to"        { return TK_TO;  }
 
+    /*     break e continue    */
+"break"     { return TK_BREAK;    }
+"continue"  { return TK_CONTINUE; }
     /*        Incremento       */
 "++"        { return TK_INC; }
 

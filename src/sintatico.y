@@ -15,10 +15,16 @@ int linha = 1;
 int id_escopo = 0;
 string codigo_gerado;
 
+// Pilhas para switch
 stack<string> switch_var_stack;
 stack<string> switch_fim_stack;
 
+// Pilha para elif
 stack<string> elif_fim_stack;
+
+// Pilhas para Break e Continue
+stack<string> loop_break_stack;
+stack<string> loop_continue_stack;
 
 struct atributos {
 	string label;
@@ -73,7 +79,7 @@ Simbolo buscar_Simbolo(string nome) {
 	
 }
 
-//codigo c q vai no final
+// Código C que vai antes da main
 string runtime_c = 
 	"#include <stdio.h>\n"
 	"#include <stdlib.h>\n"
@@ -571,6 +577,7 @@ string runtime_c =
 // Comandos
 %token TK_IF TK_ELSE TK_ELIF TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
 %token TK_IN TK_TO TK_INC
+%token TK_BREAK TK_CONTINUE
 
 // Identificador
 %token TK_ID
@@ -715,6 +722,26 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
+	/* Break */
+			| TK_BREAK TK_NEWLINE
+			{
+				if (loop_break_stack.empty()) {
+					yyerror("Erro Semantico: 'break' fora de um laco de repeticao.");
+					exit(1);
+				}
+				$$.traducao = "\tgoto " + loop_break_stack.top() + ";\n";
+			}
+
+	/* Continue */
+			| TK_CONTINUE TK_NEWLINE
+			{
+				if (loop_continue_stack.empty()) {
+					yyerror("Erro Semantico: 'continue' fora de um laco de repeticao.");
+					exit(1);
+				}
+				$$.traducao = "\tgoto " + loop_continue_stack.top() + ";\n";
+			}
+
 	/* if Genérico (Absorve if isolado, if-else, if-elif-else) */
 			| IF_PREFIXO LISTA_COMANDOS TK_DEDENT 
 			{
@@ -741,13 +768,20 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
+
+				/* Break e Continue */
+				loop_break_stack.push(gen_label());
+				loop_continue_stack.push(gen_label());
 			}
 			LISTA_COMANDOS TK_DEDENT
 			{
 				pilha_tabela_simbolos.pop_back();
 
-				string l_inicio = gen_label();
-				string l_fim = gen_label();
+				string l_inicio = loop_continue_stack.top();
+				string l_fim = loop_break_stack.top();
+				loop_continue_stack.pop();
+				loop_break_stack.pop();
+
 				$$.traducao = l_inicio + ":\n" +
 							  $2.traducao +
 							  "\tif (eh_verdadeiro(" + $2.label + ") == 0) goto " + l_fim + ";\n" +
@@ -761,16 +795,27 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
-			}
+
+				/* Break e Continue */
+				loop_break_stack.push(gen_label());
+				loop_continue_stack.push(gen_label());
+			}	
 			LISTA_COMANDOS TK_DEDENT TK_WHILE E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.pop_back();
 
 				string l_inicio = gen_label();
+				string l_continue = loop_continue_stack.top();
+				string l_fim = loop_break_stack.top();
+				loop_continue_stack.pop();
+				loop_break_stack.pop();
+
 				$$.traducao = l_inicio + ":\n" +
 							  $6.traducao +
+							  l_continue + ":\n" +
 							  $9.traducao +
-							  "\tif (eh_verdadeiro(" + $9.label + ") != 0) goto " + l_inicio + ";\n";
+							  "\tif (eh_verdadeiro(" + $9.label + ") != 0) goto " + l_inicio + ";\n" +
+							  l_fim + ":\n";
 			}
 
 	/* for i in x to y: */
@@ -780,7 +825,11 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				id_escopo++;
 
 				// registra a variavel iteradora (i)
-				registrar_variavel($2.label);				
+				registrar_variavel($2.label);
+				
+				/* Break e Continue */
+				loop_break_stack.push(gen_label());
+				loop_continue_stack.push(gen_label());
 			}
 			LISTA_COMANDOS TK_DEDENT
 			{
@@ -791,8 +840,15 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				pilha_tabela_simbolos.pop_back();
 
 				string l_inicio = gen_label();
-				string l_fim = gen_label();
+				string l_continue = loop_continue_stack.top();
+				string l_fim = loop_break_stack.top();
+				loop_continue_stack.pop();
+				loop_break_stack.pop();
+
+				// Temporária que avalia a condição
 				string temp_cond = gentempcode();
+				
+				// Temporária com o valor 1, para somar (i=i+1)
 				string temp_um = gentempcode();
 				
 				// inicializa i com o valor de x
@@ -805,6 +861,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 							  "\tif (eh_verdadeiro(" + temp_cond + ") == 0) goto " + l_fim + ";\n" +
 							  $11.traducao + // corpo do for
+							  l_continue + ":\n" + 
 							  "\t" + temp_um + " = cria_int(1);\n" + 
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" + // i = i+1
 							  "\tgoto " + l_inicio + ";\n" +
