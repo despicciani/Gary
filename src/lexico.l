@@ -66,13 +66,13 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     
     BEGIN(INITIAL); 
     
-    if (indentacao_atual > pilha_indentação.top()) {
-        pilha_indentação.push(indentacao_atual);
+    if (indentacao_atual > pilha_indentacao.top()) {
+        pilha_indentacao.push(indentacao_atual);
         return TK_INDENT;
     } 
-    else if (indentacao_atual < pilha_indentação.top()) {
-        while (pilha_indentação.top() > indentacao_atual) {
-            pilha_indentação.pop();
+    else if (indentacao_atual < pilha_indentacao.top()) {
+        while (pilha_indentacao.top() > indentacao_atual) {
+            pilha_indentacao.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -92,9 +92,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     BEGIN(INITIAL); 
 
     int indentacao_atual = 0;
-    if (indentacao_atual < pilha_indentação.top()) {
-        while (pilha_indentação.top() > indentacao_atual) {
-            pilha_indentação.pop();
+    if (indentacao_atual < pilha_indentacao.top()) {
+        while (pilha_indentacao.top() > indentacao_atual) {
+            pilha_indentacao.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -204,8 +204,8 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
         return TK_NEWLINE;
     }
 
-    if (pilha_indentação.top() > 0) {
-        pilha_indentação.pop();
+    if (pilha_indentacao.top() > 0) {
+        pilha_indentacao.pop();
         return TK_DEDENT;
     }
     return 0; 
