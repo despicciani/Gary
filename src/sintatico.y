@@ -1438,8 +1438,15 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				string l_inicio = gen_label();
 				string l_continue = loop_continue_stack.top();
 				string l_fim = loop_break_stack.top();
+				string l_checagem_crescente = gen_label();
+				string l_corpo = gen_label();
+				string l_passo_crescente = gen_label();
+				
 				loop_continue_stack.pop();
 				loop_break_stack.pop();
+
+				// Temporária para ver se é crescente ou decrescente
+				string temp_eh_crescente = gentempcode();
 
 				// Temporária que avalia a condição
 				string temp_cond = gentempcode();
@@ -1447,25 +1454,53 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				// Temporária com o valor 1, para somar (i=i+1)
 				string temp_um = gentempcode();
 				
-				// inicializa i com o valor de x
-				string trad_init = $4.traducao + "\t" + s.label + " = " + $4.label + ";\n";
-				
+				string cond_crescente = gencondcode();
 				string cond = gencondcode();
 
-				// monta o laço
+				// Inicializa i com o valor de x
+				string trad_init = $4.traducao + 
+								   "\t" + s.label + " = " + $4.label + ";\n" +
+									$6.traducao + 
+				                   "\t" + temp_eh_crescente + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
+				                   "\t" + cond_crescente + " = eh_verdadeiro(" + temp_eh_crescente + ");\n";
+
+
+				// Monta o laço bidirecional
 				$$.traducao = trad_init + 
-							  l_inicio + ":\n" +
-							  $6.traducao + // avalia o teto (y)
-							  "\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
-							  "\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" + 
-							  "\t" + cond + " = !" + cond + ";\n" +
-							  "\tif (" + cond + ") goto " + l_fim + ";\n" +
-							  $9.traducao + // corpo do for
-							  l_continue + ":\n" + 
-							  "\t" + temp_um + " = cria_int(1);\n" + 
-							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" + // i = i+1
-							  "\tgoto " + l_inicio + ";\n" +
-							  l_fim + ":\n";
+										l_inicio + ":\n" +
+										$6.traducao + // Reavalia o teto (y) a cada iteração
+										"\tif (" + cond_crescente + ") goto " + l_checagem_crescente + ";\n" +
+							  
+										// --- CASO DECRESCENTE ---
+										"\t" + temp_cond + " = maior_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
+										"\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" + 
+										"\t" + cond + " = !" + cond + ";\n" +
+										"\tif (" + cond + ") goto " + l_fim + ";\n" +
+										"\tgoto " + l_corpo + ";\n" +
+										
+										// --- CASO CRESCENTE ---
+										l_checagem_crescente + ":\n" +
+										"\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
+										"\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" + 
+										"\t" + cond + " = !" + cond + ";\n" +
+										"\tif (" + cond + ") goto " + l_fim + ";\n" +
+										
+										// --- CORPO DO LAÇO ---
+										l_corpo + ":\n" +
+										$9.traducao + 
+										
+										// --- PASSO (INCREMENTO / DECREMENTO) ---
+										l_continue + ":\n" + 
+										"\t" + temp_um + " = cria_int(1);\n" + 
+										"\tif (" + cond_crescente + ") goto " + l_passo_crescente + ";\n" +
+										// Subtrai 1 se for decrescente
+										"\t" + s.label + " = sub_dinamica(" + s.label + ", " + temp_um + ");\n" +
+										"\tgoto " + l_inicio + ";\n" +
+										l_passo_crescente + ":\n" +
+										// Soma 1 se for crescente
+										"\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" +
+										"\tgoto " + l_inicio + ";\n" +
+										l_fim + ":\n";
 			}
 
 	/* switch case (basicamente uma cascata de ifs) */
