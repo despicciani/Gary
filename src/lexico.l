@@ -5,7 +5,7 @@
 
 using namespace std;
 
-stack<int> pilhas_indentacao;
+stack<int> pilha_indentacao;
 int dedents_pendentes = 0;
 bool inicio_configurado = false;
 bool enter_eof_emitido = false;
@@ -46,7 +46,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %{
     if (!inicio_configurado) {
-        pilhas_indentacao.push(0);
+        pilha_indentacao.push(0);
         inicio_configurado = true;
         BEGIN(CHECK_INDENT); 
     }
@@ -66,13 +66,13 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     
     BEGIN(INITIAL); 
     
-    if (indentacao_atual > pilhas_indentacao.top()) {
-        pilhas_indentacao.push(indentacao_atual);
+    if (indentacao_atual > pilha_indentação.top()) {
+        pilha_indentação.push(indentacao_atual);
         return TK_INDENT;
     } 
-    else if (indentacao_atual < pilhas_indentacao.top()) {
-        while (pilhas_indentacao.top() > indentacao_atual) {
-            pilhas_indentacao.pop();
+    else if (indentacao_atual < pilha_indentação.top()) {
+        while (pilha_indentação.top() > indentacao_atual) {
+            pilha_indentação.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -92,9 +92,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     BEGIN(INITIAL); 
 
     int indentacao_atual = 0;
-    if (indentacao_atual < pilhas_indentacao.top()) {
-        while (pilhas_indentacao.top() > indentacao_atual) {
-            pilhas_indentacao.pop();
+    if (indentacao_atual < pilha_indentação.top()) {
+        while (pilha_indentação.top() > indentacao_atual) {
+            pilha_indentação.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -204,8 +204,8 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
         return TK_NEWLINE;
     }
 
-    if (pilhas_indentacao.top() > 0) {
-        pilhas_indentacao.pop();
+    if (pilha_indentação.top() > 0) {
+        pilha_indentação.pop();
         return TK_DEDENT;
     }
     return 0; 
