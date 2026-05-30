@@ -17,8 +17,8 @@ bool enter_eof_emitido = false;
 
 DIGITO [0-9]
 
-INT {DIGITO}+
-FLOAT {DIGITO}+\.{DIGITO}+
+INT 0|[1-9]{DIGITO}*
+FLOAT {INT}\.{DIGITO}+
 ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %%
@@ -149,6 +149,18 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /*        Incremento       */
 "++"        { return TK_INC; }
 
+    /*     Cast Explícito      */
+"int"       { yylval.label = yytext; return TK_CAST_INT; }
+"float"     { yylval.label = yytext; return TK_CAST_FLOAT; }
+"str"       { yylval.label = yytext; return TK_CAST_STR; }
+"bool"      { yylval.label = yytext; return TK_CAST_BOOL; }
+"char"      { yylval.label = yytext; return TK_CAST_CHAR; }
+
+    /*  Operadores Lógicos     */
+"and"       { yylval.label = yytext; return TK_AND; }
+"or"        { yylval.label = yytext; return TK_OR;  }
+"not"       { yylval.label = yytext; return TK_NOT; }
+
     /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
 {INT}		{ yylval.label = yytext; return TK_INT;   }
@@ -178,12 +190,6 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "!="                { return TK_DIF;  }
 ">"                 { return '>';     }
 "<"                 { return '<';     }
-
-    /*  Operadores Lógicos     */
-
-"&&"                { return TK_AND; }
-"||"                { return TK_OR;  }
-"!"                 { return '!';    } 
 
     /*    Chaves de Blocos     */
 "{"                 { return '{'; }

@@ -226,6 +226,7 @@ string runtime_c =
 	"}\n"
 	"\n"
 
+	/* Funções de Entrada e Saída */
 	// Função para Printar
 	"void print_dinamico(Var v) {\n"
 		"    int cond;\n"
@@ -350,6 +351,7 @@ string runtime_c =
 	"}\n"
 	"\n"
 
+	/* Funções Aritméticas */
 	// Função de Soma
 	"Var soma_dinamica(Var a, Var b) {\n"
 		"    Var r;\n"
@@ -552,6 +554,7 @@ string runtime_c =
 	"}\n"
 	"\n"
 
+	/* Funções Relacionais */
 	// Função de ==
 	"Var igual_dinamico(Var a, Var b) {\n"
 		"    Var r;\n"
@@ -617,24 +620,6 @@ string runtime_c =
 		"    goto FIM;\n"
 		"L_ERR:\n"
 		"    erro_runtime(\"==\");\n"
-		"FIM:\n"
-		"    return r;\n"
-	"}\n"
-	"\n"
-
-	// Função de &&
-	"Var and_dinamico(Var a, Var b) {\n"
-		"    Var r;\n"
-		"    int c;\n"
-		"    c = (a.tipo != TIPO_BOOL);\n"
-		"    if (c) goto L_ERR;\n"
-		"    c = (b.tipo != TIPO_BOOL);\n"
-		"    if (c) goto L_ERR;\n"
-		"    c = (a.valor.v_bool && b.valor.v_bool);\n"
-		"    r = cria_bool(c);\n"
-		"    goto FIM;\n"
-		"L_ERR:\n"
-		"    erro_runtime(\"&&\");\n"
 		"FIM:\n"
 		"    return r;\n"
 	"}\n"
@@ -820,6 +805,7 @@ string runtime_c =
 	"}\n"
 	"\n"
 
+	/* Funções Lógicas */
 	// Função de !=
 	"Var diferente_dinamico(Var a, Var b) {\n"
 		"    Var r;\n"
@@ -890,39 +876,208 @@ string runtime_c =
 	"}\n"
 	"\n"
 
-	// Função de ||
+	// Função AND
+	"Var and_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c1;\n"
+		"    int c2;\n"
+		"    int c3;\n"
+		"    c1 = eh_verdadeiro(a);\n"
+		"    c2 = eh_verdadeiro(b);\n"
+		"    c3 = (c1 && c2);\n"
+		"    r = cria_bool(c3);\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função OR
 	"Var or_dinamico(Var a, Var b) {\n"
 		"    Var r;\n"
+		"    int c1;\n"
+		"    int c2;\n"
+		"    int c3;\n"
+		"    c1 = eh_verdadeiro(a);\n"
+		"    c2 = eh_verdadeiro(b);\n"
+		"    c3 = (c1 || c2);\n"
+		"    r = cria_bool(c3);\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função NOT
+	"Var not_dinamico(Var a) {\n"
+		"    Var r;\n"
+		"    int c1;\n"
+		"    int c2;\n"
+		"    c1 = eh_verdadeiro(a);\n"
+		"    c2 = !c1;\n"
+		"    r = cria_bool(c2);\n"
+		"    return r;\n"
+	"}\n"
+
+	/* Funções de Cast Explícito */
+	// Função de cast int()
+	"Var cast_int(Var a) {\n"
+		"    Var r;\n"
 		"    int c;\n"
+		"    int t_int;\n"
+		"    long l_val;\n"
+		"    char* endptr;\n"
+		"    c = (a.tipo != TIPO_INT);\n"
+		"    if (c) goto L1;\n"
+		"    r = a;\n"
+		"    goto FIM;\n"
+		"L1:\n"
+		"    c = (a.tipo != TIPO_FLOAT);\n"
+		"    if (c) goto L2;\n"
+		"    t_int = (int)a.valor.v_float;\n"
+		"    r = cria_int(t_int);\n"
+		"    goto FIM;\n"
+		"L2:\n"
 		"    c = (a.tipo != TIPO_BOOL);\n"
+		"    if (c) goto L3;\n"
+		"    r = cria_int(a.valor.v_bool);\n"
+		"    goto FIM;\n"
+		"L3:\n"
+		"    c = (a.tipo != TIPO_STRING);\n"
 		"    if (c) goto L_ERR;\n"
-		"    c = (b.tipo != TIPO_BOOL);\n"
-		"    if (c) goto L_ERR;\n"
-		"    c = (a.valor.v_bool || b.valor.v_bool);\n"
-		"    r = cria_bool(c);\n"
+		"    l_val = strtol(a.valor.v_string, &endptr, 10);\n"
+		"    t_int = (int)l_val;\n"
+		"    r = cria_int(t_int);\n"
 		"    goto FIM;\n"
 		"L_ERR:\n"
-		"    erro_runtime(\"||\");\n"
+		"    erro_runtime(\"int()\");\n"
 		"FIM:\n"
 		"    return r;\n"
 	"}\n"
 	"\n"
 
-	// Função de !
-	"Var not_dinamico(Var a) {\n"
+	// Função de cast float()
+	"Var cast_float(Var a) {\n"
 		"    Var r;\n"
 		"    int c;\n"
+		"    float t_float;\n"
+		"    char* endptr;\n"
+		"    double d_val;\n"
+		"    c = (a.tipo != TIPO_FLOAT);\n"
+		"    if (c) goto L1;\n"
+		"    r = a;\n"
+		"    goto FIM;\n"
+		"L1:\n"
+		"    c = (a.tipo != TIPO_INT);\n"
+		"    if (c) goto L2;\n"
+		"    t_float = (float)a.valor.v_int;\n"
+		"    r = cria_float(t_float);\n"
+		"    goto FIM;\n"
+		"L2:\n"
 		"    c = (a.tipo != TIPO_BOOL);\n"
+		"    if (c) goto L3;\n"
+		"    t_float = (float)a.valor.v_bool;\n"
+		"    r = cria_float(t_float);\n"
+		"    goto FIM;\n"
+		"L3:\n"
+		"    c = (a.tipo != TIPO_STRING);\n"
 		"    if (c) goto L_ERR;\n"
-		"    c = (!a.valor.v_bool);\n"
-		"    r = cria_bool(c);\n"
+		"    d_val = strtod(a.valor.v_string, &endptr);\n"
+		"    t_float = (float)d_val;\n"
+		"    r = cria_float(t_float);\n"
 		"    goto FIM;\n"
 		"L_ERR:\n"
-		"    erro_runtime(\"!\");\n"
+		"    erro_runtime(\"float()\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de cast str()
+	"Var cast_str(Var a) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"    char* buf;\n"
+		"    c = (a.tipo != TIPO_STRING);\n"
+		"    if (c) goto L1;\n"
+		"    r = cria_string(a.valor.v_string);\n"
+		"    goto FIM;\n"
+		"L1:\n"
+		"    c = (a.tipo != TIPO_INT);\n"
+		"    if (c) goto L2;\n"
+		"    buf = (char*)malloc(32);\n"
+		"    sprintf(buf, \"%d\", a.valor.v_int);\n"
+		"    r = cria_string(buf);\n"
+		"    free(buf);\n"
+		"    goto FIM;\n"
+		"L2:\n"
+		"    c = (a.tipo != TIPO_FLOAT);\n"
+		"    if (c) goto L3;\n"
+		"    buf = (char*)malloc(64);\n"
+		"    sprintf(buf, \"%f\", a.valor.v_float);\n"
+		"    r = cria_string(buf);\n"
+		"    free(buf);\n"
+		"    goto FIM;\n"
+		"L3:\n"
+		"    c = (a.tipo != TIPO_BOOL);\n"
+		"    if (c) goto L4;\n"
+		"    c = (a.valor.v_bool == 1);\n"
+		"    if (c) goto L_TRUE;\n"
+		"    r = cria_string(\"false\");\n"
+		"    goto FIM;\n"
+		"L_TRUE:\n"
+		"    r = cria_string(\"true\");\n"
+		"    goto FIM;\n"
+		"L4:\n"
+		"    c = (a.tipo != TIPO_CHAR);\n"
+		"    if (c) goto L_ERR;\n"
+		"    buf = (char*)malloc(2);\n"
+		"    buf[0] = a.valor.v_char;\n"
+		"    buf[1] = '\\0';\n"
+		"    r = cria_string(buf);\n"
+		"    free(buf);\n"
+		"    goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"str()\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de cast bool()
+	"Var cast_bool(Var a) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"    c = eh_verdadeiro(a);\n"
+		"    r = cria_bool(c);\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
+	// Função de cast char()
+	"Var cast_char(Var a) {\n"
+		"    Var r;\n"
+		"    int c;\n"
+		"    int len;\n"
+		"    int c2;\n"
+		"    char t_char;\n"
+		"    c = (a.tipo != TIPO_CHAR);\n"
+		"    if (c) goto L1;\n"
+		"    r = a;\n"
+		"    goto FIM;\n"
+		"L1:\n"
+		"    c = (a.tipo != TIPO_STRING);\n"
+		"    if (c) goto L_ERR;\n"
+		"    len = strlen(a.valor.v_string);\n"
+		"    c2 = (len > 1);\n"
+		"    if (c2) goto L_ERR2;\n"
+		"    t_char = a.valor.v_string[0];\n"
+		"    r = cria_char(t_char);\n"
+		"    goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"char()\");\n"
+		"L_ERR2:\n"
+		"    printf(\"Erro de Execucao: Operacao char() aceita somente strings de tamanho 1.\\n\");\n"
+		"    exit(1);\n"
 		"FIM:\n"
 		"    return r;\n"
 	"}\n";
-
 %}
 
 // Literais
@@ -948,6 +1103,9 @@ string runtime_c =
 // Identificador
 %token TK_ID
 
+// Cast Explícito
+%token TK_CAST_INT TK_CAST_FLOAT TK_CAST_STR TK_CAST_BOOL TK_CAST_CHAR
+
 // tokens da identacao por tabulacao
 %token TK_INDENT TK_DEDENT TK_NEWLINE
 
@@ -955,7 +1113,7 @@ string runtime_c =
 %token TK_GE TK_LE TK_EQ TK_DIF
 
 // Tokens Lógicos
-%token TK_AND TK_OR
+%token TK_AND TK_OR TK_NOT
 
 // Símbolo Inicial
 %start PROGRAMA
@@ -967,7 +1125,7 @@ string runtime_c =
 %left '>' '<' TK_GE TK_LE 
 %left '+' '-'
 %left '*' '/'
-%right '!'
+%right TK_NOT
 
 %%
 	/* Início			*/
@@ -1433,6 +1591,38 @@ E 			: TK_ID
 				$$.traducao = "\t" + $$.label + " = input_dinamico();\n";
 			}
 
+	/* Conversões Explícitas (Cast) */
+			| TK_CAST_INT '(' E ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = $3.traducao + 
+					"\t" + $$.label + " = cast_int(" + $3.label + ");\n";
+			}
+			| TK_CAST_FLOAT '(' E ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = $3.traducao + 
+					"\t" + $$.label + " = cast_float(" + $3.label + ");\n";
+			}
+			| TK_CAST_STR '(' E ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = $3.traducao + 
+					"\t" + $$.label + " = cast_str(" + $3.label + ");\n";
+			}
+			| TK_CAST_BOOL '(' E ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = $3.traducao + 
+					"\t" + $$.label + " = cast_bool(" + $3.label + ");\n";
+			}
+			| TK_CAST_CHAR '(' E ')'
+			{
+				$$.label = gentempcode();
+				$$.traducao = $3.traducao + 
+					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
+			}
+
 	/* Operadores Aritméticos	*/ 
 			| E '+' E
 			{
@@ -1520,7 +1710,7 @@ E 			: TK_ID
 					" = or_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
-			| '!' E
+			| TK_NOT E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $2.traducao + "\t" + $$.label + " = not_dinamico(" + $2.label + ");\n";
