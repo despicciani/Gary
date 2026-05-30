@@ -27,6 +27,9 @@ stack<string> elif_fim_stack;
 stack<string> loop_break_stack;
 stack<string> loop_continue_stack;
 
+// Pilha para erro no for
+stack<int> for_linha_stack;
+
 struct atributos {
 	string label;
 	string traducao;
@@ -135,6 +138,7 @@ string runtime_c =
 	"#include <stdio.h>\n"
 	"#include <stdlib.h>\n"
 	"#include <string.h>\n\n"
+	"int linha_execucao = 1;\n\n"
 
 	// Função para Saber Tamanho da String
 	"int lenstr(const char* str) {\n"
@@ -188,7 +192,7 @@ string runtime_c =
 
 	// Função de Erro de Execução
 	"void erro_runtime(const char* operacao) {\n"
-		"    printf(\"Erro de Execucao: Tipos incompativeis para a operacao '%s'.\\n\", operacao);\n"
+		"    printf(\"Erro de Execucao na linha %d: Tipos incompativeis para a operacao '%s'.\\n\", linha_execucao, operacao);\n"
 		"    exit(1);\n"
 	"}\n"
 	"\n"
@@ -1073,7 +1077,7 @@ string runtime_c =
 		"L_ERR:\n"
 		"    erro_runtime(\"char()\");\n"
 		"L_ERR2:\n"
-		"    printf(\"Erro de Execucao: Operacao char() aceita somente strings de tamanho 1.\\n\");\n"
+		"    printf(\"Erro de Execucao na linha %d: Operacao char() aceita somente strings de tamanho 1.\\n\", linha_execucao);\n"
 		"    exit(1);\n"
 		"FIM:\n"
 		"    return r;\n"
@@ -1426,6 +1430,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				/* Break e Continue */
 				loop_break_stack.push(gen_label());
 				loop_continue_stack.push(gen_label());
+
+				// Linha que pode dar erro for
+				for_linha_stack.push(linha);
 			}
 			BLOCO
 			{
@@ -1441,26 +1448,37 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				string l_checagem_crescente = gen_label();
 				string l_corpo = gen_label();
 				string l_passo_crescente = gen_label();
+				string l_err_tipo = gen_label();
+				string l_err_iterador = gen_label();
 				
 				loop_continue_stack.pop();
 				loop_break_stack.pop();
 
+				// Resgata a linha correta do cabeçalho do FOR
+				int linha_for = for_linha_stack.top();
+				for_linha_stack.pop();
+
 				// Temporária para ver se é crescente ou decrescente
 				string temp_eh_crescente = gentempcode();
 
-				// Temporária que avalia a condição
+				// Temporária que avalia a checagem
 				string temp_cond = gentempcode();
 				
 				// Temporária com o valor 1, para somar (i=i+1)
 				string temp_um = gentempcode();
-				
+
 				string cond_crescente = gencondcode();
 				string cond = gencondcode();
+				string cond_tipo = gencondcode();
 
-				// Inicializa i com o valor de x
+				// Inicializa i com o valor de x e verifica os se os tipos das expressões são int
 				string trad_init = $4.traducao + 
+								   "\t" + cond_tipo + " = (" + $4.label + ".tipo != TIPO_INT);\n" +
+				            	   "\tif (" + cond_tipo + ") goto " + l_err_tipo + ";\n" +
 								   "\t" + s.label + " = " + $4.label + ";\n" +
-									$6.traducao + 
+								   $6.traducao + 
+								   "\t" + cond_tipo + " = (" + $6.label + ".tipo != TIPO_INT);\n" +
+				                   "\tif (" + cond_tipo + ") goto " + l_err_tipo + ";\n" +
 				                   "\t" + temp_eh_crescente + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 				                   "\t" + cond_crescente + " = eh_verdadeiro(" + temp_eh_crescente + ");\n";
 
@@ -1471,14 +1489,14 @@ CMD			: TK_ID '=' E TK_NEWLINE
 										$6.traducao + // Reavalia o teto (y) a cada iteração
 										"\tif (" + cond_crescente + ") goto " + l_checagem_crescente + ";\n" +
 							  
-										// --- CASO DECRESCENTE ---
+										// --- CHECAGEM CASO DECRESCENTE ---
 										"\t" + temp_cond + " = maior_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 										"\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" + 
 										"\t" + cond + " = !" + cond + ";\n" +
 										"\tif (" + cond + ") goto " + l_fim + ";\n" +
 										"\tgoto " + l_corpo + ";\n" +
 										
-										// --- CASO CRESCENTE ---
+										// --- CHECAGEM CASO CRESCENTE ---
 										l_checagem_crescente + ":\n" +
 										"\t" + temp_cond + " = menor_igual_dinamico(" + s.label + ", " + $6.label + ");\n" +
 										"\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" + 
@@ -1491,6 +1509,11 @@ CMD			: TK_ID '=' E TK_NEWLINE
 										
 										// --- PASSO (INCREMENTO / DECREMENTO) ---
 										l_continue + ":\n" + 
+
+										// Catraca de segurança: Verifica se a variável iteradora continua sendo INT
+										"\t" + cond_tipo + " = (" + s.label + ".tipo != TIPO_INT);\n" +
+										"\tif (" + cond_tipo + ") goto " + l_err_iterador + ";\n" +
+										
 										"\t" + temp_um + " = cria_int(1);\n" + 
 										"\tif (" + cond_crescente + ") goto " + l_passo_crescente + ";\n" +
 										// Subtrai 1 se for decrescente
@@ -1500,6 +1523,17 @@ CMD			: TK_ID '=' E TK_NEWLINE
 										// Soma 1 se for crescente
 										"\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n" +
 										"\tgoto " + l_inicio + ";\n" +
+
+										// --- TRATAMENTO DE ERRO DOS LIMITES ---
+										l_err_tipo + ":\n" +
+										"\tprintf(\"Erro de Execucao na linha " + to_string(linha_for) + ": O laco 'for' aceita apenas limites do tipo INT.\\n\");\n" +
+										"\texit(1);\n" +
+										
+										// --- TRATAMENTO DE ERRO DA VARIÁVEL MUDADA ---
+										l_err_iterador + ":\n" +
+										"\tprintf(\"Erro de Execucao na linha " + to_string(linha_for) + ": A variavel iteradora do laco 'for' foi alterada para um tipo incompativel dentro do bloco.\\n\");\n" +
+										"\texit(1);\n" +
+
 										l_fim + ":\n";
 			}
 
@@ -1631,30 +1665,35 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = cast_int(" + $3.label + ");\n";
 			}
 			| TK_CAST_FLOAT '(' E ')'
 			{
 				$$.label = gentempcode();
 				$$.traducao = $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = cast_float(" + $3.label + ");\n";
 			}
 			| TK_CAST_STR '(' E ')'
 			{
 				$$.label = gentempcode();
 				$$.traducao = $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = cast_str(" + $3.label + ");\n";
 			}
 			| TK_CAST_BOOL '(' E ')'
 			{
 				$$.label = gentempcode();
 				$$.traducao = $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = cast_bool(" + $3.label + ");\n";
 			}
 			| TK_CAST_CHAR '(' E ')'
 			{
 				$$.label = gentempcode();
 				$$.traducao = $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
 			}
 
@@ -1662,7 +1701,8 @@ E 			: TK_ID
 			| E '+' E
 			{
 				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + 
+				$$.traducao = $1.traducao + $3.traducao +
+					"\tlinha_execucao = " + to_string(linha) + ";\n" + 
 					"\t" + $$.label + " = soma_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1670,6 +1710,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = sub_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1677,13 +1718,15 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + 
+					"\tlinha_execucao = " + to_string(linha) + ";\n" +
 					"\t" + $$.label + " = mult_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '/' E
 			{
 				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + 
+				$$.traducao = $1.traducao + $3.traducao +
+					"\tlinha_execucao = " + to_string(linha) + ";\n" + 
 					"\t" + $$.label + " = div_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1692,6 +1735,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao +
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = maior_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1699,6 +1743,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao +
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = menor_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1706,6 +1751,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao +
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = maior_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1713,6 +1759,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao +
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = menor_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1720,6 +1767,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + 
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1727,6 +1775,7 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao +
+				"\tlinha_execucao = " + to_string(linha) + ";\n" +
 				"\t" + $$.label + " = diferente_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
