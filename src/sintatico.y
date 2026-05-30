@@ -63,8 +63,15 @@ void registrar_variavel(string nome) {
 
 	if (!ja_existe) {
 		Simbolo s;
+		
+		// Caso esteja no escopo padrão
+		if (pilha_tabela_simbolos.size() == 1) {
+			s.label = "var_0_" + nome;
+		}
+		else {
 		s.label = "var_" + to_string(id_escopo) + "_" + nome;
-
+		}
+		
 		pilha_tabela_simbolos.back()[nome] = s;
 		variaveis_declaradas.push_back(s.label);
 	}
@@ -803,10 +810,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 	/* x++ */
 			| TK_ID TK_INC TK_NEWLINE
 			{
-				registrar_variavel($1.label);
-				string temp_um = gentempcode();
-				
 				Simbolo s = buscar_Simbolo($1.label);
+				
+				string temp_um = gentempcode();
 
 				// TAC: x = soma_dinamica(x, 1);
 				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
