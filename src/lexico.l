@@ -7,6 +7,7 @@ using namespace std;
 
 stack<int> pilha_indentacao;
 int dedents_pendentes = 0;
+int chaves_abertas = 0;
 bool inicio_configurado = false;
 bool enter_eof_emitido = false;
 
@@ -108,13 +109,19 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     BEGIN(INITIAL);
 }
 
-\r?\n           { linha++; BEGIN(CHECK_INDENT); return TK_NEWLINE; }
+\r?\n           { 
+                    linha++; 
+                    if (chaves_abertas == 0) {
+                        BEGIN(CHECK_INDENT); 
+                    }
+                    return TK_NEWLINE; 
+                }
 
 [ \t]+          { }
 
     /*    Variáveis Globais e Locais   */
 "global"    { return TK_GLOBAL; }
-"local"     { return TK_LOCAL;    }
+"local"     { return TK_LOCAL;  }
 
     /*         boolean         */
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
@@ -192,8 +199,8 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "<"                 { return '<';     }
 
     /*    Chaves de Blocos     */
-"{"                 { return '{'; }
-"}"                 { return '}'; }
+"{"                 { chaves_abertas++; return '{'; }
+"}"                 { chaves_abertas--; return '}'; }
 
     /*       Parênteses        */
 "("                 { return '('; }

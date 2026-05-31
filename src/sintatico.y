@@ -1169,7 +1169,7 @@ LISTA_COMANDOS		: LISTA_COMANDOS CMD
 					}
 					;
 
-	/* Bloco aceita Indentação ou Chaves */
+	/* Bloco por Indentação*/
 BLOCO		: TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT 
 			{ 
 				$$.traducao = $3.traducao; 
@@ -1275,19 +1275,10 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = "";
 			}
 
-	/* Bloco Anônimo por Identação */
-			| TK_INDENT 
+	/* Absorve Tabs Soltos  */
+			| TK_INDENT TK_NEWLINE TK_DEDENT
 			{
-				// Abre um escopo temporário para o bloco solto
-				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
-				id_escopo++;
-			}
-			LISTA_COMANDOS TK_DEDENT
-			{
-				// Fecha o escopo temporário
-				pilha_tabela_simbolos.pop_back();
-
-				$$.traducao = $3.traducao; 
+				$$.traducao = ""; 
 			}
 
 	/* Bloco Anônimo por Chaves   */
@@ -1442,6 +1433,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				
 				pilha_tabela_simbolos.pop_back();
 
+				// Labels necessários
 				string l_inicio = gen_label();
 				string l_continue = loop_continue_stack.top();
 				string l_fim = loop_break_stack.top();
