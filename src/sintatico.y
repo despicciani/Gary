@@ -9,11 +9,30 @@
 
 using namespace std;
 
-int var_temp_qnt;
+// Variáveis que criam temporárias
+int var_temp_qnt = 0;
 int var_cond_qnt = 0;
+
+// Variáveis que Criam Labels Personalizados
 int label_qnt = 0;
+int if_qnt = 0;
+int for_qnt = 0;
+int while_qnt = 0;
+int do_while_qnt = 0;
+int switch_qnt = 0;
+
+// Pilhas de ID para aninhamento seguro
+stack<int> if_id_stack;
+stack<int> do_while_id_stack;
+stack<int> for_id_stack;
+
+// Variável que guarda qual Linha está atualmente
 int linha = 1;
+
+// Variável que guarda quantos escopos já foram abertos
 int id_escopo = 0;
+
+// Código Gerado pela Análise Sintática
 string codigo_gerado;
 
 // Pilhas para switch
@@ -30,35 +49,44 @@ stack<string> loop_continue_stack;
 // Pilha para erro no for
 stack<int> for_linha_stack;
 
+// Struct que pertence aos Terminais e Não Terminais da Gramática
 struct atributos {
 	string label;
 	string traducao;
 };
 
+// Struct para Tabela de Símbolos
 struct Simbolo {
 	string label;
 };
 
+// Vetor para Imprimir as Variáveis na Ordem em que Foram Declaradas
 vector<string> variaveis_declaradas;
+
 vector<string> variaveis_globais;
+
+// Pilha (Vetor) de Tabela de Símbolos
 vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
 
 int yylex(void);
 void yyerror(string);
 
+// Gera Código para Temporária
 string gentempcode() {
 	var_temp_qnt++;
 	return "t" + to_string(var_temp_qnt);
 }
 
+// Gera Código para Variável de Condição
 string gencondcode() {
 	var_cond_qnt++;
 	return "c" + to_string(var_cond_qnt);
 }
 
-string gen_label() {
+// Gera Label
+string gen_label(string prefixo = "CRTL") {
     label_qnt++;
-    return "LBL_CTRL_" + to_string(label_qnt);
+    return "LBL_" + prefixo + "_" + to_string(label_qnt);
 }
 
 void registrar_variavel(string nome) {
@@ -946,11 +974,18 @@ string runtime_c =
 		"    c = (a.tipo != TIPO_STRING);\n"
 		"    if (c) goto L_ERR;\n"
 		"    l_val = strtol(a.valor.v_string, &endptr, 10);\n"
+		"    c = (endptr == a.valor.v_string);\n" // Nenhuma conversão pôde ser feita
+		"    if (c) goto L_ERR2;\n"
+		"    c = (*endptr != '\\0');\n" // O texto tem lixo após o número (ex: "42abc")
+		"    if (c) goto L_ERR2;\n"
 		"    t_int = (int)l_val;\n"
 		"    r = cria_int(t_int);\n"
 		"    goto FIM;\n"
 		"L_ERR:\n"
 		"    erro_runtime(\"int()\");\n"
+		"L_ERR2:\n"
+		"    printf(\"Erro de Execucao na linha %d: Nao foi possivel converter a string em inteiro.\\n\", linha_execucao);\n"
+		"    exit(1);\n"
 		"FIM:\n"
 		"    return r;\n"
 	"}\n"
@@ -983,11 +1018,18 @@ string runtime_c =
 		"    c = (a.tipo != TIPO_STRING);\n"
 		"    if (c) goto L_ERR;\n"
 		"    d_val = strtod(a.valor.v_string, &endptr);\n"
+		"    c = (endptr == a.valor.v_string);\n" // Verifica se nenhuma conversão foi feita
+		"    if (c) goto L_ERR2;\n"
+		"    c = (*endptr != '\\0');\n" // Verifica se sobrou texto não-numérico
+		"    if (c) goto L_ERR2;\n"
 		"    t_float = (float)d_val;\n"
 		"    r = cria_float(t_float);\n"
 		"    goto FIM;\n"
 		"L_ERR:\n"
 		"    erro_runtime(\"float()\");\n"
+		"L_ERR2:\n"
+		"    printf(\"Erro de Execucao na linha %d: Nao foi possivel converter a string em float.\\n\", linha_execucao);\n"
+		"    exit(1);\n"
 		"FIM:\n"
 		"    return r;\n"
 	"}\n"
@@ -1110,7 +1152,7 @@ string runtime_c =
 // Cast Explícito
 %token TK_CAST_INT TK_CAST_FLOAT TK_CAST_STR TK_CAST_BOOL TK_CAST_CHAR
 
-// tokens da identacao por tabulacao
+// tokens da indentacao por tabulacao
 %token TK_INDENT TK_DEDENT TK_NEWLINE
 
 // Tokens Relacionais
@@ -1182,6 +1224,10 @@ IF_PREFIXO	: TK_IF E ':'
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 
+				// ID if para Labels
+				if_qnt++;
+				if_id_stack.push(if_qnt);
+
 				$$.label = $2.label;
 				$$.traducao = $2.traducao; 
 			}
@@ -1205,8 +1251,10 @@ BLOCOS_ALTERNATIVOS : ELIF_PREFIXO BLOCO
 					}
 					BLOCOS_ALTERNATIVOS
 					{
-						string l_falso = gen_label();
+						string l_falso = gen_label("ELIF_DEU_FALSO");
 						string l_fim = elif_fim_stack.top(); // Pega o label de fim
+
+						// Condição do ELIF
 						string cond = gencondcode();
 
 						$$.traducao = $1.traducao +
@@ -1329,11 +1377,20 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			| IF_PREFIXO BLOCO 
 			{
 				pilha_tabela_simbolos.pop_back();
-				elif_fim_stack.push(gen_label());
+
+				// Recupera ID if para Labels
+				int if_id = if_id_stack.top();
+
+				// Para o bloco de alternativas saber para onde pular no fim
+				elif_fim_stack.push("LBL_IF_FIM_" + to_string(if_id));
 			}
 			BLOCOS_ALTERNATIVOS
 			{
-				string l_falso = gen_label();
+				// Recupera Id para Label
+				int if_id = if_id_stack.top();
+				if_id_stack.pop();
+
+				string l_falso = gen_label("IF_DEU_FALSO");
 				string l_fim = elif_fim_stack.top(); // Resgata o label de fim
 				elif_fim_stack.pop(); // Limpa a pilha
 				string cond = gencondcode();
@@ -1355,18 +1412,25 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 
+				// Id para Labels
+				while_qnt++;
+				int while_id = while_qnt;
+
 				/* Break e Continue */
-				loop_break_stack.push(gen_label());
-				loop_continue_stack.push(gen_label());
+				loop_break_stack.push("LBL_WHILE_FIM_" + to_string(while_id));
+				loop_continue_stack.push("LBL_WHILE_INICIO_" + to_string(while_id));
 			}
 			BLOCO
 			{
 				pilha_tabela_simbolos.pop_back();
 
+				// Labels necessários
 				string l_inicio = loop_continue_stack.top();
 				string l_fim = loop_break_stack.top();
 				loop_continue_stack.pop();
 				loop_break_stack.pop();
+
+				// Condição do while
 				string cond = gencondcode();
 				
 				$$.traducao = l_inicio + ":\n" +
@@ -1385,19 +1449,33 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 
+				// ID para Labels
+				do_while_qnt++;
+				do_while_id_stack.push(do_while_qnt);
+				int do_id = do_while_qnt;
+
 				/* Break e Continue */
-				loop_break_stack.push(gen_label());
-				loop_continue_stack.push(gen_label());
+				loop_break_stack.push("LBL_DO_FIM_" + to_string(do_id));
+				loop_continue_stack.push("LBL_DO_CONTINUE_" + to_string(do_id));
 			}	
 			BLOCO TK_WHILE E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.pop_back();
 
-				string l_inicio = gen_label();
+				// Resgata o ID
+				int do_id = do_while_id_stack.top();
+				do_while_id_stack.pop();
+
+				// Labels Necessários
+				string l_inicio = "LBL_DO_INICIO_" + to_string(do_id);
 				string l_continue = loop_continue_stack.top();
 				string l_fim = loop_break_stack.top();
+
+				// Tira das Pilhas
 				loop_continue_stack.pop();
 				loop_break_stack.pop();
+
+				// Condição Do-While
 				string cond = gencondcode();
 				
 				$$.traducao = l_inicio + ":\n" +
@@ -1418,11 +1496,16 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				// registra a variavel iteradora (i)
 				registrar_variavel($2.label);
 				
-				/* Break e Continue */
-				loop_break_stack.push(gen_label());
-				loop_continue_stack.push(gen_label());
+				// Incrementa ID dos labels
+				for_qnt++;
+				for_id_stack.push(for_qnt);
+				int for_id = for_qnt;
 
-				// Linha que pode dar erro for
+				/* Break e Continue usando ID para Label */
+				loop_break_stack.push("LBL_FOR_FIM_" + to_string(for_id));
+				loop_continue_stack.push("LBL_FOR_CONTINUE_" + to_string(for_id));
+
+				// Linha que pode dar erro de Tipo no for (Linha do cabeçalho)
 				for_linha_stack.push(linha);
 			}
 			BLOCO
@@ -1433,18 +1516,23 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				
 				pilha_tabela_simbolos.pop_back();
 
-				// Labels necessários
-				string l_inicio = gen_label();
+				// Recupera Labels Continue e Break e Retira eles da Pilha
 				string l_continue = loop_continue_stack.top();
 				string l_fim = loop_break_stack.top();
-				string l_checagem_crescente = gen_label();
-				string l_corpo = gen_label();
-				string l_passo_crescente = gen_label();
-				string l_err_tipo = gen_label();
-				string l_err_iterador = gen_label();
-				
 				loop_continue_stack.pop();
 				loop_break_stack.pop();
+
+				// Pega o ID do FOR atual para os labels internos
+				int for_id = for_id_stack.top();
+				for_id_stack.pop();
+
+				// Labels necessários
+				string l_inicio = "LBL_FOR_INICIO_" + to_string(for_id);
+				string l_checagem_crescente = "LBL_FOR_CHECAGEM_CRESCENTE_" + to_string(for_id);
+				string l_corpo = "LBL_FOR_CORPO_" + to_string(for_id);
+				string l_passo_crescente = "LBL_FOR_PASSO_CRESCENTE_" + to_string(for_id);
+				string l_err_tipo = "LBL_FOR_ERR_TIPO_" + to_string(for_id);
+				string l_err_iterador = "LBL_FOR_ERR_ITER_" + to_string(for_id);
 
 				// Resgata a linha correta do cabeçalho do FOR
 				int linha_for = for_linha_stack.top();
@@ -1459,8 +1547,13 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				// Temporária com o valor 1, para somar (i=i+1)
 				string temp_um = gentempcode();
 
+				// Condição se é Crescente
 				string cond_crescente = gencondcode();
+				
+				// Condição de Checagem
 				string cond = gencondcode();
+
+				// Condição de Tipo
 				string cond_tipo = gencondcode();
 
 				// Inicializa i com o valor de x e verifica os se os tipos das expressões são int
@@ -1532,11 +1625,15 @@ CMD			: TK_ID '=' E TK_NEWLINE
 	/* switch case (basicamente uma cascata de ifs) */
 			| TK_SWITCH E ':'
 			{ 
+				// ID switch
+				switch_qnt++;
+				int switch_id = switch_qnt;
+
 				switch_var_stack.push($2.label); 
-				switch_fim_stack.push(gen_label()); 
+				switch_fim_stack.push("LBL_SWITCH_FIM_" + to_string(switch_id)); 
 			} 
 			BLOCO_CASOS
-			{
+			{	
 				$$.traducao = $2.traducao + $5.traducao + switch_fim_stack.top() + ":\n";
 				switch_var_stack.pop();
 				switch_fim_stack.pop();
@@ -1573,10 +1670,17 @@ CASO		: TK_CASE E ':'
 			{
 				pilha_tabela_simbolos.pop_back();
 
-				string l_prox_caso = gen_label();
-				string var_switch = switch_var_stack.top();
+				// Labels necessários
+				string l_prox_caso = gen_label("PROX_CASO");
 				string l_fim = switch_fim_stack.top();
+
+				// Variável do Switch
+				string var_switch = switch_var_stack.top();
+				
+				// Temporária para condição
 				string var_teste = gentempcode();
+
+				// Condição em si
 				string cond = gencondcode();
 
 				$$.traducao = $2.traducao +
@@ -1807,8 +1911,6 @@ E 			: TK_ID
 int yyparse();
 
 int main(int argc, char* argv[]) {
-	var_temp_qnt = 0;
-
 	pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 
 	if (yyparse() == 0)
