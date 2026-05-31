@@ -68,6 +68,9 @@ vector<string> variaveis_globais;
 // Pilha (Vetor) de Tabela de Símbolos
 vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
 
+// Vetor para não permitir que comandos aninhados usem a mesma variável iteradora
+vector<string> iteradores_ativos;
+
 int yylex(void);
 void yyerror(string);
 
@@ -1490,6 +1493,17 @@ CMD			: TK_ID '=' E TK_NEWLINE
 	/* for i in x to y: */
 			| TK_FOR TK_ID TK_IN E TK_TO E ':'
 			{
+				// Verifica se a variável já é um iterador ativo em um laço mais externo
+				for (string iterador : iteradores_ativos) {
+					if (iterador == $2.label) {
+						yyerror("Erro Semantico: A variavel '" + $2.label + "' ja esta sendo usada como iteradora em um laco externo.");
+						exit(1);
+					}
+				}
+
+				// Tranca a Variável
+				iteradores_ativos.push_back($2.label);
+
 				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
 				id_escopo++;
 
@@ -1510,6 +1524,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			}
 			BLOCO
 			{
+				// Destranca a variável pois o laço acabou
+				iteradores_ativos.pop_back();
+
 				// Busca Simbolo de i
 				Simbolo s;
 				s = buscar_Simbolo($2.label);
