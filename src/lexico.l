@@ -5,10 +5,10 @@
 
 using namespace std;
 
-stack<int> pilhas_indentacao;
+stack<int> pilha_indentacao;
 int dedents_pendentes = 0;
+int chaves_abertas = 0;
 bool inicio_configurado = false;
-
 bool enter_eof_emitido = false;
 
 %}
@@ -18,14 +18,14 @@ bool enter_eof_emitido = false;
 
 DIGITO [0-9]
 
-INT {DIGITO}+
-FLOAT {DIGITO}+\.{DIGITO}+
+INT 0|[1-9]{DIGITO}*
+FLOAT {INT}\.{DIGITO}+
 ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %%
 
     /*
-    exemplo do esquema de tabulaçao por identaçao:
+    exemplo do esquema de bloco por indentaçao:
 
     print("inicio")
     if (teste):
@@ -47,7 +47,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 %{
     if (!inicio_configurado) {
-        pilhas_indentacao.push(0);
+        pilha_indentacao.push(0);
         inicio_configurado = true;
         BEGIN(CHECK_INDENT); 
     }
@@ -67,13 +67,13 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     
     BEGIN(INITIAL); 
     
-    if (indentacao_atual > pilhas_indentacao.top()) {
-        pilhas_indentacao.push(indentacao_atual);
+    if (indentacao_atual > pilha_indentacao.top()) {
+        pilha_indentacao.push(indentacao_atual);
         return TK_INDENT;
     } 
-    else if (indentacao_atual < pilhas_indentacao.top()) {
-        while (pilhas_indentacao.top() > indentacao_atual) {
-            pilhas_indentacao.pop();
+    else if (indentacao_atual < pilha_indentacao.top()) {
+        while (pilha_indentacao.top() > indentacao_atual) {
+            pilha_indentacao.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -91,11 +91,11 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 <CHECK_INDENT>. {
     yyless(0); 
     BEGIN(INITIAL); 
-    
+
     int indentacao_atual = 0;
-    if (indentacao_atual < pilhas_indentacao.top()) {
-        while (pilhas_indentacao.top() > indentacao_atual) {
-            pilhas_indentacao.pop();
+    if (indentacao_atual < pilha_indentacao.top()) {
+        while (pilha_indentacao.top() > indentacao_atual) {
+            pilha_indentacao.pop();
             dedents_pendentes++;
         }
         if (dedents_pendentes > 0) {
@@ -109,39 +109,74 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     BEGIN(INITIAL);
 }
 
-\r?\n           { linha++; BEGIN(CHECK_INDENT); return TK_NEWLINE; }
+\r?\n           { 
+                    linha++; 
+                    if (chaves_abertas == 0) {
+                        BEGIN(CHECK_INDENT); 
+                    }
+                    return TK_NEWLINE; 
+                }
 
 [ \t]+          { }
 
+    /*    Variáveis Globais e Locais   */
+"global"    { return TK_GLOBAL; }
+"local"     { return TK_LOCAL;  }
 
-        /*          Tipos          */
+    /*         boolean         */
 "true"|"false" { yylval.label = yytext; return TK_BOOL; }
 
+    /*     entrada e saída     */
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
-"if"        { return TK_IF; }
+    /*         if-elif-else    */
+"if"        { return TK_IF;   }
 "else"      { return TK_ELSE; }
-"while"     { return TK_WHILE; }
-"do"        { return TK_DO; }
-"switch"    { return TK_SWITCH; }
-"case"      { return TK_CASE; }
-"default"   { return TK_DEFAULT; } 
+"elif"      { return TK_ELIF; }
 
+    /*        do e while       */
+"while"     { return TK_WHILE; }
+"do"        { return TK_DO;    }
+
+    /*         switch          */
+"switch"    { return TK_SWITCH;  }
+"case"      { return TK_CASE;    }
+"default"   { return TK_DEFAULT; }
+
+    /*           for           */
 "for"       { return TK_FOR; }
-"in"        { return TK_IN; }
-"to"        { return TK_TO; }
+"in"        { return TK_IN;  }
+"to"        { return TK_TO;  }
+
+    /*     break e continue    */
+"break"     { return TK_BREAK;    }
+"continue"  { return TK_CONTINUE; }
+
+    /*        Incremento       */
 "++"        { return TK_INC; }
+
+    /*     Cast Explícito      */
+"int"       { yylval.label = yytext; return TK_CAST_INT; }
+"float"     { yylval.label = yytext; return TK_CAST_FLOAT; }
+"str"       { yylval.label = yytext; return TK_CAST_STR; }
+"bool"      { yylval.label = yytext; return TK_CAST_BOOL; }
+"char"      { yylval.label = yytext; return TK_CAST_CHAR; }
+
+    /*  Operadores Lógicos     */
+"and"       { yylval.label = yytext; return TK_AND; }
+"or"        { yylval.label = yytext; return TK_OR;  }
+"not"       { yylval.label = yytext; return TK_NOT; }
 
     /* Números e Identificador */
 {FLOAT}     { yylval.label = yytext; return TK_FLOAT; }
-{INT}		{ yylval.label = yytext; return TK_INT; }
-{ID}        { yylval.label = yytext; return TK_ID; }
+{INT}		{ yylval.label = yytext; return TK_INT;   }
+{ID}        { yylval.label = yytext; return TK_ID;    }
 
     /*          Char           */
 '[^']'      { yylval.label = yytext; return TK_CHAR; }
 
-    /*          String           */
+    /*          String         */
 \"[^\"]*\"  { yylval.label = yytext; return TK_STRING; }
 
     /*   Atribuição e ;        */
@@ -163,11 +198,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 ">"                 { return '>';     }
 "<"                 { return '<';     }
 
-    /*  Operadores Lógicos     */
-
-"&&"                { return TK_AND; }
-"||"                { return TK_OR;  }
-"!"                 { return '!';    } 
+    /*    Chaves de Blocos     */
+"{"                 { chaves_abertas++; return '{'; }
+"}"                 { chaves_abertas--; return '}'; }
 
     /*       Parênteses        */
 "("                 { return '('; }
@@ -175,7 +208,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 .			        { fprintf(stderr, "Caractere nao reconhecido na linha %d: %s\n", linha, yytext); }
 
-    /* garante que todos os blocos abertos sejam fechados */
+    /* Garante que todos os blocos abertos sejam fechados */
 <<EOF>> {
 
         // lança uma linha (enter) antes de qualquer coisa para fechar a ultima linha
@@ -184,8 +217,8 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
         return TK_NEWLINE;
     }
 
-    if (pilhas_indentacao.top() > 0) {
-        pilhas_indentacao.pop();
+    if (pilha_indentacao.top() > 0) {
+        pilha_indentacao.pop();
         return TK_DEDENT;
     }
     return 0; 

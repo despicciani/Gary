@@ -7,7 +7,7 @@ PARSER_PARAMS := -d --yacc $(DIR)/sintatico.y
 CXXFLAGS := -Wno-free-nonheap-object
 FILE := exemplos/01_soma.foca
 
-all: glf translate
+all: glf
 
 compile: glf
 

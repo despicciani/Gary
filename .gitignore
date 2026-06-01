@@ -1,5 +1,4 @@
-# Pasta de exemplos
-
+# Examples Folder
 exemplos/
 
 # Prerequisites
@@ -40,3 +39,8 @@ exemplos/
 *.yy.c
 *.yy.h
 glf
+
+# Test Files
+saidagary.c 
+testegary
+exec
