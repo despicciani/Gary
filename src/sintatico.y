@@ -53,6 +53,7 @@ stack<int> for_linha_stack;
 struct atributos {
 	string label;
 	string traducao;
+	int linha_token;
 };
 
 // Struct para Tabela de Símbolos
@@ -1732,6 +1733,7 @@ E 			: TK_ID
 				Simbolo s = buscar_Simbolo($1.label);
 				$$.label = s.label;
 				$$.traducao = "";
+				$$.linha_token = linha;
 			}
 	
 	/*		  Literais			*/
@@ -1739,24 +1741,28 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = cria_int(" + $1.label + ");\n";
+				$$.linha_token = linha;
 			}
 
 			| TK_FLOAT
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = cria_float(" + $1.label + ");\n";
+				$$.linha_token = linha;
 			}
 
 			| TK_CHAR
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = cria_char(" + $1.label + ");\n";
+				$$.linha_token = linha;
 			}
 
 			| TK_STRING
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = cria_string(" + $1.label + ");\n";
+				$$.linha_token = linha;
 			}
 
 			| TK_BOOL
@@ -1764,6 +1770,7 @@ E 			: TK_ID
 				$$.label = gentempcode();
 				string valor_c = ($1.label == "true") ? "1" : "0";
 				$$.traducao = "\t" + $$.label + " = cria_bool(" + valor_c + ");\n"; 
+				$$.linha_token = linha;
 			}
 
 	/* Função Input */
@@ -1771,42 +1778,48 @@ E 			: TK_ID
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = input_dinamico();\n";
+				$$.linha_token = linha;
 			}
 
 	/* Conversões Explícitas (Cast) */
 			| TK_CAST_INT '(' E ')'
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $3.linha_token;
 				$$.traducao = $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_int(" + $3.label + ");\n";
 			}
 			| TK_CAST_FLOAT '(' E ')'
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $3.linha_token;
 				$$.traducao = $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_float(" + $3.label + ");\n";
 			}
 			| TK_CAST_STR '(' E ')'
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $3.linha_token;
 				$$.traducao = $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_str(" + $3.label + ");\n";
 			}
 			| TK_CAST_BOOL '(' E ')'
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $3.linha_token;
 				$$.traducao = $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_bool(" + $3.label + ");\n";
 			}
 			| TK_CAST_CHAR '(' E ')'
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $3.linha_token;
 				$$.traducao = $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
 			}
 
@@ -1814,32 +1827,36 @@ E 			: TK_ID
 			| E '+' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-					"\tlinha_execucao = " + to_string(linha) + ";\n" + 
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" + 
 					"\t" + $$.label + " = soma_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '-' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 					"\t" + $$.label + " = sub_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '*' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao + 
-					"\tlinha_execucao = " + to_string(linha) + ";\n" +
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 					"\t" + $$.label + " = mult_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '/' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-					"\tlinha_execucao = " + to_string(linha) + ";\n" + 
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" + 
 					"\t" + $$.label + " = div_dinamica(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1847,48 +1864,54 @@ E 			: TK_ID
 			| E '>' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = maior_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E '<' E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = menor_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_GE E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = maior_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_LE E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = menor_igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_EQ E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao + 
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = igual_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
 			| E TK_DIF E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao +
-				"\tlinha_execucao = " + to_string(linha) + ";\n" +
+				"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" +
 				"\t" + $$.label + " = diferente_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
 
@@ -1896,6 +1919,7 @@ E 			: TK_ID
 			| E TK_AND E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = and_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
@@ -1903,6 +1927,7 @@ E 			: TK_ID
 			| E TK_OR E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label +
 					" = or_dinamico(" + $1.label + ", " + $3.label + ");\n";
 			}
@@ -1910,6 +1935,7 @@ E 			: TK_ID
 			| TK_NOT E
 			{
 				$$.label = gentempcode();
+				$$.linha_token = $2.linha_token;
 				$$.traducao = $2.traducao + "\t" + $$.label + " = not_dinamico(" + $2.label + ");\n";
 			}
 
@@ -1918,6 +1944,7 @@ E 			: TK_ID
 			{
 				$$.label = $2.label;
 				$$.traducao = $2.traducao;
+				$$.linha_token = $2.linha_token;
 			}
 			;
 
