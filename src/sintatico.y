@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <stack>
+#include <algorithm>
 
 #define YYSTYPE atributos
 
@@ -72,18 +73,33 @@ vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
 // Vetor para não permitir que comandos aninhados usem a mesma variável iteradora
 vector<string> iteradores_ativos;
 
+bool em_funcao = false;
+vector<string> variaveis_main;
+vector<string> variaveis_func_atual;
+vector<string> parametros_atuais;
+
+int temp_start_func = 0;
+int cond_start_func = 0;
+
+vector<int> temporarias_main;
+vector<int> cond_main;
+
+string codigo_funcoes = "";
+string codigo_headers_funcoes = ""; // Protótipos para permitir recursão/chamada fora de ordem
+
 int yylex(void);
 void yyerror(string);
 
 // Gera Código para Temporária
 string gentempcode() {
 	var_temp_qnt++;
+	if (!em_funcao) temporarias_main.push_back(var_temp_qnt);
 	return "t" + to_string(var_temp_qnt);
 }
 
-// Gera Código para Variável de Condição
 string gencondcode() {
 	var_cond_qnt++;
+	if (!em_funcao) cond_main.push_back(var_cond_qnt);
 	return "c" + to_string(var_cond_qnt);
 }
 
@@ -104,17 +120,16 @@ void registrar_variavel(string nome) {
 
 	if (!ja_existe) {
 		Simbolo s;
-		
-		// Caso esteja no escopo padrão
 		if (pilha_tabela_simbolos.size() == 1) {
 			s.label = "var_0_" + nome;
+		} else {
+			s.label = "var_" + to_string(id_escopo) + "_" + nome;
 		}
-		else {
-		s.label = "var_" + to_string(id_escopo) + "_" + nome;
-		}
-		
 		pilha_tabela_simbolos.back()[nome] = s;
-		variaveis_declaradas.push_back(s.label);
+		
+		// Direciona a variável para a RAM local da função ou para o Main
+		if (em_funcao) variaveis_func_atual.push_back(s.label);
+		else variaveis_main.push_back(s.label);
 	}
 }
 
@@ -122,26 +137,24 @@ void registrar_variavel_global(string nome) {
 	if (!pilha_tabela_simbolos.front().count(nome)) {
 		Simbolo s;
 		s.label = "global_" + nome;
-
-		// Injeta na base da pilha (escopo 0) para que ela não morra 
-		// quando o bloco atual terminar.
+		
+		// Injeta na base da pilha (escopo 0)
 		pilha_tabela_simbolos.front()[nome] = s;
-	
-		// Adiciona no vetor de globais
-		variaveis_declaradas.push_back(s.label);
 	}
 
-	// Salva no vetor de globais (verificando para não duplicar)
+    // Usamos o label com "global_" para verificar e salvar
+    string label_global = "global_" + nome;
     bool ja_existe = false;
-    for (string g : variaveis_globais) {
-        if (g == nome) {
+    
+	for (string g : variaveis_globais) {
+        if (g == label_global) {
             ja_existe = true;
             break;
         }
     }
 
     if (!ja_existe) {
-        variaveis_globais.push_back(nome);
+        variaveis_globais.push_back(label_global);
     }
 }
 
@@ -151,7 +164,13 @@ void registrar_variavel_local(string nome) {
 		s.label = "var_" + to_string(id_escopo) + "_" + nome;
 
 		pilha_tabela_simbolos.back()[nome] = s;
-		variaveis_declaradas.push_back(s.label);
+		
+		// Direciona para a memória da função atual ou para o Main
+		if (em_funcao) {
+			variaveis_func_atual.push_back(s.label);
+		} else {
+			variaveis_main.push_back(s.label);
+		}
 	}
 }
 
@@ -1146,6 +1165,9 @@ string runtime_c =
 %token TK_IN TK_TO TK_INC
 %token TK_BREAK TK_CONTINUE
 
+// Funcao
+%token TK_DEF TK_RETURN
+
 // Variável GLobal e Local
 %token TK_GLOBAL
 %token TK_LOCAL
@@ -1181,20 +1203,29 @@ string runtime_c =
 	/* Início			*/
 PROGRAMA 	: LISTA_COMANDOS
 			{
-				codigo_gerado = runtime_c + "\nint main(void) {\n";
+				// >>> O SEGREDO ESTÁ AQUI: Injetar os headers antes de tudo <<<
+				codigo_gerado = runtime_c + "\n" + codigo_headers_funcoes + "\n";
+				
+				// gera as variáveis globais no topo do c
+				for (const string& g : variaveis_globais) {
+					codigo_gerado += "Var " + g + ";\n";
+				}
+
+				// >>> E AQUI: Injetar as funções antes da main <<<
+				codigo_gerado += "\n" + codigo_funcoes + "\nint main(void) {\n";
 
 				// Declara Temporárias
-				for (int i = 1; i <= var_temp_qnt; i++) {
+				for (int i : temporarias_main) {
 					codigo_gerado += "\tVar t" + to_string(i) + ";\n";
 				}
 
 				// Declara Variáveis de Condição
-				for (int i = 1; i <= var_cond_qnt; i++) {
+				for (int i : cond_main) {
 					codigo_gerado += "\tint c" + to_string(i) + ";\n";
 				}
 
 				// Declara Variáveis do Usuário
-				for (const string& nome_var : variaveis_declaradas) {
+				for (const string& nome_var : variaveis_main) {
 					codigo_gerado += "\tVar " + nome_var + ";\n";
 				}
 
@@ -1639,6 +1670,63 @@ CMD			: TK_ID '=' E TK_NEWLINE
 
 										l_fim + ":\n";
 			}
+			/* Definição de Função */
+			| TK_DEF TK_ID '('
+			{
+				// Configura o isolamento de escopo antes de ler o bloco
+				em_funcao = true;
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+				temp_start_func = var_temp_qnt;
+				cond_start_func = var_cond_qnt;
+				variaveis_func_atual.clear();
+				parametros_atuais.clear();
+			}
+			PARAMETROS ')' ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			{
+				string func_name = "f_" + $2.label;
+				
+				// 1. Gera o protótipo global
+				codigo_headers_funcoes += "Var " + func_name + "(" + $5.traducao + ");\n";
+
+				// 2. Monta o corpo da função TAC isolada
+				string signature = "Var " + func_name + "(" + $5.traducao + ") {\n";
+				string declarations = "";
+
+				// Declara as temporárias exclusivas desta função
+				for(int i = temp_start_func + 1; i <= var_temp_qnt; i++){
+					declarations += "\tVar t" + to_string(i) + ";\n";
+				}
+				for(int i = cond_start_func + 1; i <= var_cond_qnt; i++){
+					declarations += "\tint c" + to_string(i) + ";\n";
+				}
+				
+				// Declara as variáveis locais (ignorando os parâmetros, pois já estão na assinatura)
+				for(const string& v : variaveis_func_atual){
+					bool is_param = false;
+					for(const string& p : parametros_atuais) { if(v == p) { is_param = true; break; } }
+					if(!is_param) declarations += "\tVar " + v + ";\n";
+				}
+
+				string body = $10.traducao;
+				body += "\treturn cria_int(0);\n"; // Return de segurança caso o usuário esqueça
+
+				codigo_funcoes += signature + declarations + body + "}\n\n";
+
+				pilha_tabela_simbolos.pop_back();
+				em_funcao = false;
+				$$.traducao = ""; // Como a função foi enviada pro topo global, ela some do main!
+			}
+
+	/* Retorno de Função */
+			| TK_RETURN E TK_NEWLINE
+			{
+				$$.traducao = $2.traducao + "\treturn " + $2.label + ";\n";
+			}
+			| TK_RETURN TK_NEWLINE
+			{
+				$$.traducao = "\treturn cria_int(0);\n";
+			}
 
 	/* switch case (basicamente uma cascata de ifs) */
 			| TK_SWITCH E ':'
@@ -1724,6 +1812,38 @@ DEFAULT		: TK_DEFAULT ':'
 				string l_fim = switch_fim_stack.top();
 				$$.traducao = $4.traducao + "\tgoto " + l_fim + ";\n";
 			}
+			;
+
+PARAMETROS	: TK_ID ',' PARAMETROS
+			{
+				registrar_variavel($1.label);
+				Simbolo s = buscar_Simbolo($1.label);
+				parametros_atuais.push_back(s.label);
+				$$.traducao = "Var " + s.label + ", " + $3.traducao;
+			}
+			| TK_ID
+			{
+				registrar_variavel($1.label);
+				Simbolo s = buscar_Simbolo($1.label);
+				parametros_atuais.push_back(s.label);
+				$$.traducao = "Var " + s.label;
+			}
+			| 
+			{ $$.traducao = ""; }
+			;
+
+			ARGUMENTOS	: E ',' ARGUMENTOS
+			{
+				$$.traducao = $1.traducao + $3.traducao;
+				$$.label = $1.label + ", " + $3.label;
+			}
+			| E
+			{
+				$$.traducao = $1.traducao;
+				$$.label = $1.label;
+			}
+			| 
+			{ $$.traducao = ""; $$.label = ""; }
 			;
 
 	/* Expressão 			*/
@@ -1946,7 +2066,14 @@ E 			: TK_ID
 				$$.traducao = $2.traducao;
 				$$.linha_token = $2.linha_token;
 			}
-			;
+
+			/* Chamada de Função como Expressão */
+			| TK_ID '(' ARGUMENTOS ')'
+			{
+				$$.label = gentempcode();
+				$$.linha_token = linha;
+				$$.traducao = $3.traducao + "\t" + $$.label + " = f_" + $1.label + "(" + $3.label + ");\n";
+			}
 
 %%
 

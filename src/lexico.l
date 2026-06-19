@@ -130,6 +130,11 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
+    /*     função     */
+"def"       { return TK_DEF; }
+"return"    { return TK_RETURN; }
+","         { return ','; }
+
     /*         if-elif-else    */
 "if"        { return TK_IF;   }
 "else"      { return TK_ELSE; }
