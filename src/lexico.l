@@ -168,6 +168,12 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "bool"      { yylval.label = yytext; return TK_CAST_BOOL; }
 "char"      { yylval.label = yytext; return TK_CAST_CHAR; }
 
+    /* Operadores Compostos */
+"+="                { return TK_ADD_ASSIGN; }
+"-="                { return TK_SUB_ASSIGN; }
+"*="                { return TK_MUL_ASSIGN; }
+"/="                { return TK_DIV_ASSIGN; }
+
     /*  Operadores Lógicos     */
 "and"       { yylval.label = yytext; return TK_AND; }
 "or"        { yylval.label = yytext; return TK_OR;  }

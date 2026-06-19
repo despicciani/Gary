@@ -230,7 +230,7 @@ string runtime_c =
 
 	"void erro_runtime(const char* operacao);\n"
 	"\n"
-	
+
 	// Arrays
 
 	"Var cria_array(Var tamanho) {\n"
@@ -1226,6 +1226,9 @@ string runtime_c =
 // Tokens Lógicos
 %token TK_AND TK_OR TK_NOT
 
+// Operadores Compostos
+%token TK_ADD_ASSIGN TK_SUB_ASSIGN TK_MUL_ASSIGN TK_DIV_ASSIGN
+
 // Símbolo Inicial
 %start PROGRAMA
 
@@ -1237,6 +1240,7 @@ string runtime_c =
 %left '+' '-'
 %left '*' '/'
 %right TK_NOT
+%left '[' ']'
 
 %%
 	/* Início			*/
@@ -1365,6 +1369,68 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = $3.traducao + "\t" + s.label + " = " + $3.label + ";\n";
 			}
 
+			/* Operadores Compostos para Variáveis */
+			| TK_ID TK_ADD_ASSIGN E TK_NEWLINE
+			{
+				// Diferente do '=', aqui nós só buscamos, pois a variável já DEVE existir!
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.traducao = $3.traducao + "\t" + s.label + " = soma_dinamica(" + s.label + ", " + $3.label + ");\n";
+			}
+			| TK_ID TK_SUB_ASSIGN E TK_NEWLINE
+			{
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.traducao = $3.traducao + "\t" + s.label + " = sub_dinamica(" + s.label + ", " + $3.label + ");\n";
+			}
+			| TK_ID TK_MUL_ASSIGN E TK_NEWLINE
+			{
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.traducao = $3.traducao + "\t" + s.label + " = mult_dinamica(" + s.label + ", " + $3.label + ");\n";
+			}
+			| TK_ID TK_DIV_ASSIGN E TK_NEWLINE
+			{
+				Simbolo s = buscar_Simbolo($1.label);
+				$$.traducao = $3.traducao + "\t" + s.label + " = div_dinamica(" + s.label + ", " + $3.label + ");\n";
+			}
+
+			/* Operador composto para divisão em Arrays/Matriz */
+			| E '[' E ']' TK_ADD_ASSIGN E TK_NEWLINE
+			{
+				string temp_val = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + $6.traducao +
+							  "\t" + temp_val + " = get_array(" + $1.label + ", " + $3.label + ");\n" +
+							  "\t" + temp_val + " = soma_dinamica(" + temp_val + ", " + $6.label + ");\n" +
+							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
+			}
+
+			/* Operador composto para divisão em Arrays/Matriz */
+			| E '[' E ']' TK_SUB_ASSIGN E TK_NEWLINE
+			{
+				string temp_val = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + $6.traducao +
+							  "\t" + temp_val + " = get_array(" + $1.label + ", " + $3.label + ");\n" +
+							  "\t" + temp_val + " = sub_dinamica(" + temp_val + ", " + $6.label + ");\n" +
+							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
+			}
+
+			/* Operador composto para divisão em Arrays/Matriz */
+			| E '[' E ']' TK_MUL_ASSIGN E TK_NEWLINE
+			{
+				string temp_val = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + $6.traducao +
+							  "\t" + temp_val + " = get_array(" + $1.label + ", " + $3.label + ");\n" +
+							  "\t" + temp_val + " = mult_dinamica(" + temp_val + ", " + $6.label + ");\n" +
+							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
+			}
+
+			/* Operador composto para divisão em Arrays/Matriz */
+			| E '[' E ']' TK_DIV_ASSIGN E TK_NEWLINE
+			{
+				string temp_val = gentempcode();
+				$$.traducao = $1.traducao + $3.traducao + $6.traducao +
+							  "\t" + temp_val + " = get_array(" + $1.label + ", " + $3.label + ");\n" +
+							  "\t" + temp_val + " = div_dinamica(" + temp_val + ", " + $6.label + ");\n" +
+							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
+			}
 	/* Absorve linhas sobrando no código */
 			| TK_NEWLINE
 			{
