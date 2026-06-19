@@ -55,6 +55,7 @@ struct atributos {
 	string label;
 	string traducao;
 	int linha_token;
+	vector<string> array_labels; // guarda os temporarios dos itens do array
 };
 
 // Struct para Tabela de Símbolos
@@ -208,20 +209,58 @@ string runtime_c =
 	"}\n"
 	"\n"
 
-	"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL, TIPO_STRING } TipoVar;\n"
+	"typedef enum { TIPO_INT, TIPO_FLOAT, TIPO_CHAR, TIPO_BOOL, TIPO_STRING, TIPO_ARRAY } TipoVar;\n"
 
-	// Estrutura de Dados Principal
-	"typedef struct {\n"
-		"    TipoVar tipo;\n"
-		"    union {\n"
-		"        int v_int;\n"
-		"        float v_float;\n"
-		"        char v_char;\n"
-		"        int v_bool;\n"
-		"        char* v_string;\n"
-		"    } valor;\n"
-		"\n"
+	// Estrutura de dados principal
+	"struct Var_struct;\n"
+	"typedef struct Var_struct {\n"
+	"    TipoVar tipo;\n"
+	"    union {\n"
+	"        int v_int;\n"
+	"        float v_float;\n"
+	"        char v_char;\n"
+	"        int v_bool;\n"
+	"        char* v_string;\n"
+	"        struct {\n"
+	"            int tamanho;\n"
+	"            struct Var_struct* elementos;\n"
+	"        } v_array;\n"
+	"    } valor;\n"
 	"} Var;\n"
+
+	"void erro_runtime(const char* operacao);\n"
+	"\n"
+	
+	// Arrays
+
+	"Var cria_array(Var tamanho) {\n"
+	"    Var res;\n"
+	"    int c, tam;\n"
+	"    c = (tamanho.tipo != TIPO_INT); if (c) erro_runtime(\"Array Size\");\n"
+	"    tam = tamanho.valor.v_int;\n"
+	"    res.tipo = TIPO_ARRAY;\n"
+	"    res.valor.v_array.tamanho = tam;\n"
+	"    res.valor.v_array.elementos = (struct Var_struct*)malloc(tam * sizeof(struct Var_struct));\n"
+	"    return res;\n"
+	"}\n"
+	"\n"
+	"Var get_array(Var arr, Var indice) {\n"
+	"    int c;\n"
+	"    c = (arr.tipo != TIPO_ARRAY); if (c) erro_runtime(\"[] (Nao e um Array)\");\n"
+	"    c = (indice.tipo != TIPO_INT); if (c) erro_runtime(\"[] (Indice nao e INT)\");\n"
+	"    c = (indice.valor.v_int < 0); if (c) erro_runtime(\"Index < 0\");\n"
+	"    c = (indice.valor.v_int >= arr.valor.v_array.tamanho); if (c) erro_runtime(\"Index Out of Bounds\");\n"
+	"    return arr.valor.v_array.elementos[indice.valor.v_int];\n"
+	"}\n"
+	"\n"
+	"void set_array(Var arr, Var indice, Var valor) {\n"
+	"    int c;\n"
+	"    c = (arr.tipo != TIPO_ARRAY); if (c) erro_runtime(\"[]= (Nao e um Array)\");\n"
+	"    c = (indice.tipo != TIPO_INT); if (c) erro_runtime(\"[]= (Indice nao e INT)\");\n"
+	"    c = (indice.valor.v_int < 0); if (c) erro_runtime(\"Index < 0\");\n"
+	"    c = (indice.valor.v_int >= arr.valor.v_array.tamanho); if (c) erro_runtime(\"Index Out of Bounds\");\n"
+	"    arr.valor.v_array.elementos[indice.valor.v_int] = valor;\n"
+	"}\n"
 
 	// Funções que Criam Valores dos Tipos
 	"Var cria_int(int v) { Var res; res.tipo = TIPO_INT; res.valor.v_int = v; return res; }\n"
@@ -1364,6 +1403,13 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = ""; 
 			}
 
+	/* Atribuição Dinâmica de Arrays e Matrizes */
+			| E '[' E ']' '=' E TK_NEWLINE
+			{
+				$$.traducao = $1.traducao + $3.traducao + $6.traducao +
+							  "\tset_array(" + $1.label + ", " + $3.label + ", " + $6.label + ");\n";
+			}
+
 	/* Bloco Anônimo por Chaves   */
 			| '{' 
 			{
@@ -1832,7 +1878,7 @@ PARAMETROS	: TK_ID ',' PARAMETROS
 			{ $$.traducao = ""; }
 			;
 
-			ARGUMENTOS	: E ',' ARGUMENTOS
+ARGUMENTOS	: E ',' ARGUMENTOS
 			{
 				$$.traducao = $1.traducao + $3.traducao;
 				$$.label = $1.label + ", " + $3.label;
@@ -1844,6 +1890,21 @@ PARAMETROS	: TK_ID ',' PARAMETROS
 			}
 			| 
 			{ $$.traducao = ""; $$.label = ""; }
+			;
+// Arrays
+LISTA_VALORES	: E ',' LISTA_VALORES
+			{
+				$$.traducao = $1.traducao + $3.traducao;
+				$$.array_labels = $3.array_labels;
+				$$.array_labels.insert($$.array_labels.begin(), $1.label);
+			}
+			| E
+			{
+				$$.traducao = $1.traducao;
+				$$.array_labels.push_back($1.label);
+			}
+			| 
+			{ $$.traducao = ""; }
 			;
 
 	/* Expressão 			*/
@@ -1943,6 +2004,33 @@ E 			: TK_ID
 					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
 			}
 
+			/* Literal de Array / Matriz (ex: [1, 2, 3] ou [[1], [2]]) */
+			| '[' LISTA_VALORES ']'
+			{
+				$$.label = gentempcode();
+				$$.linha_token = linha;
+				string temp_size = gentempcode();
+				
+				string code = $2.traducao;
+				code += "\t" + temp_size + " = cria_int(" + to_string($2.array_labels.size()) + ");\n";
+				code += "\t" + $$.label + " = cria_array(" + temp_size + ");\n";
+				
+				for(int i = 0; i < $2.array_labels.size(); i++) {
+					string temp_idx = gentempcode();
+					code += "\t" + temp_idx + " = cria_int(" + to_string(i) + ");\n";
+					code += "\tset_array(" + $$.label + ", " + temp_idx + ", " + $2.array_labels[i] + ");\n";
+				}
+				$$.traducao = code;
+			}
+
+			/* Acesso a Array / Matriz (ex: a[0] ou a[0][1]) */
+			| E '[' E ']'
+			{
+				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
+				$$.traducao = $1.traducao + $3.traducao + 
+							  "\t" + $$.label + " = get_array(" + $1.label + ", " + $3.label + ");\n";
+			}
 	/* Operadores Aritméticos	*/ 
 			| E '+' E
 			{

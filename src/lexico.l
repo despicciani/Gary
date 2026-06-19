@@ -207,7 +207,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "{"                 { chaves_abertas++; return '{'; }
 "}"                 { chaves_abertas--; return '}'; }
 
-    /*       Parênteses        */
+    /* Parênteses e Colchetes */
+"["                 { return '['; }
+"]"                 { return ']'; }
 "("                 { return '('; }
 ")"                 { return ')'; }
 
