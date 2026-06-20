@@ -55,6 +55,7 @@ struct atributos {
 	string label;
 	string traducao;
 	int linha_token;
+	int num_args;
 	vector<string> array_labels; // guarda os temporarios dos itens do array
 };
 
@@ -70,6 +71,9 @@ vector<string> variaveis_globais;
 
 // Pilha (Vetor) de Tabela de Símbolos
 vector<unordered_map<string, Simbolo>> pilha_tabela_simbolos;
+
+// Tabela de Funções para checar os argumentos
+unordered_map<string, int> tabela_funcoes;
 
 // Vetor para não permitir que comandos aninhados usem a mesma variável iteradora
 vector<string> iteradores_ativos;
@@ -1827,6 +1831,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			PARAMETROS ')' ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
 			{
 				string func_name = "f_" + $2.label;
+				tabela_funcoes[$2.label] = parametros_atuais.size();
 				
 				// 1. Gera o protótipo global
 				codigo_headers_funcoes += "Var " + func_name + "(" + $5.traducao + ");\n";
@@ -1863,10 +1868,18 @@ CMD			: TK_ID '=' E TK_NEWLINE
 	/* Retorno de Função */
 			| TK_RETURN E TK_NEWLINE
 			{
+				if (!em_funcao) {
+					yyerror("Erro: 'return' so pode ser usado dentro de uma funcao.");
+					exit(1);
+				}
 				$$.traducao = $2.traducao + "\treturn " + $2.label + ";\n";
 			}
 			| TK_RETURN TK_NEWLINE
 			{
+				if (!em_funcao) {
+					yyerror("Erro: 'return' so pode ser usado dentro de uma funcao.");
+					exit(1);
+				}
 				$$.traducao = "\treturn cria_int(0);\n";
 			}
 
@@ -1978,14 +1991,16 @@ ARGUMENTOS	: E ',' ARGUMENTOS
 			{
 				$$.traducao = $1.traducao + $3.traducao;
 				$$.label = $1.label + ", " + $3.label;
+				$$.num_args = 1 + $3.num_args;
 			}
 			| E
 			{
 				$$.traducao = $1.traducao;
 				$$.label = $1.label;
+				$$.num_args = 1;
 			}
 			| 
-			{ $$.traducao = ""; $$.label = ""; }
+			{ $$.traducao = ""; $$.label = ""; $$.num_args = 0; }
 			;
 // Arrays
 LISTA_VALORES	: E ',' LISTA_VALORES
@@ -2310,6 +2325,14 @@ E 			: TK_ID
 			/* Chamada de Função como Expressão */
 			| TK_ID '(' ARGUMENTOS ')'
 			{
+				if (tabela_funcoes.count($1.label) == 0) {
+					yyerror("Erro: Funcao '" + $1.label + "' nao foi declarada.");
+					exit(1);
+				}
+				if (tabela_funcoes[$1.label] != $3.num_args) {
+					yyerror("Erro: A funcao '" + $1.label + "' espera " + to_string(tabela_funcoes[$1.label]) + " argumentos, mas recebeu " + to_string($3.num_args) + ".");
+					exit(1);
+				}
 				$$.label = gentempcode();
 				$$.linha_token = linha;
 				$$.traducao = $3.traducao + "\t" + $$.label + " = f_" + $1.label + "(" + $3.label + ");\n";

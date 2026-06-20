@@ -76,6 +76,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
             pilha_indentacao.pop();
             dedents_pendentes++;
         }
+        if (pilha_indentacao.top() != indentacao_atual) {
+            fprintf(stderr, "Nivel de indentacao inconsistente.\n", linha);
+            exit(1);
+        }
         if (dedents_pendentes > 0) {
             dedents_pendentes--;
             return TK_DEDENT;
@@ -97,6 +101,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
         while (pilha_indentacao.top() > indentacao_atual) {
             pilha_indentacao.pop();
             dedents_pendentes++;
+        }
+        if (pilha_indentacao.top() != indentacao_atual) {
+            fprintf(stderr, "Nivel de indentacao inconsistente.\n", linha);
+            exit(1);
         }
         if (dedents_pendentes > 0) {
             dedents_pendentes--;
