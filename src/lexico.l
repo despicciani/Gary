@@ -207,8 +207,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /* Operadores Aritméticos  */
 "+"		            { return '+'; }
 "-"		            { return '-'; }
+"**"                { return TK_EXP; }
 "*"		            { return '*'; }
 "/"		            { return '/'; }
+"!!"                { return TK_FAT; }
 
     /* Operadores Relacionais  */
 ">="                { return TK_GE;   } 

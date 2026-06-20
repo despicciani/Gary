@@ -679,6 +679,67 @@ string runtime_c =
 		"    return r;\n"
 	"}\n"
 	"\n"
+	// Função de Exponenciação 
+	"Var exp_dinamico(Var a, Var b) {\n"
+		"    Var r;\n"
+		"    int c, t_int;\n"
+		"    int base_int, exp_int, i;\n"
+		"    float base_float, result_float;\n"
+		"    int is_float_base = 0;\n"
+		"    c = (b.tipo != TIPO_INT);\n"
+		"    if (c) goto L_ERR_EXP;\n"
+		"    exp_int = b.valor.v_int;\n"
+		"    c = (a.tipo == TIPO_FLOAT);\n"
+		"    if (c) goto L_FLOAT_BASE;\n"
+		"    c = (a.tipo != TIPO_INT);\n"
+		"    if (c) goto L_ERR_TIPO;\n"
+		"    base_int = a.valor.v_int;\n"
+		"    goto L_CALC;\n"
+		"L_FLOAT_BASE:\n"
+		"    is_float_base = 1;\n"
+		"    base_float = a.valor.v_float;\n"
+		"L_CALC:\n"
+		"    if (is_float_base) {\n"
+		"        result_float = 1.0;\n"
+		"        for (i = 0; i < exp_int; i++) result_float *= base_float;\n"
+		"        r = cria_float(result_float);\n"
+		"    } else {\n"
+		"        t_int = 1;\n"
+		"        for (i = 0; i < exp_int; i++) t_int *= base_int;\n"
+		"        r = cria_int(t_int);\n"
+		"    }\n"
+		"    goto FIM;\n"
+		"L_ERR_EXP:\n"
+		"    printf(\"Erro de Execucao na linha %d: A exponenciacao manual suporta apenas expoentes inteiros.\\n\", linha_execucao);\n"
+		"    exit(1);\n"
+		"L_ERR_TIPO:\n"
+		"    erro_runtime(\"**\");\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+	// Função Fatorial 
+	"Var fat_dinamico(Var a) {\n"
+		"    Var r;\n"
+		"    int c, n, res = 1, i;\n"
+		"    c = (a.tipo != TIPO_INT);\n"
+		"    if (c) goto L_ERR;\n"
+		"    n = a.valor.v_int;\n"
+		"    c = (n < 0);\n"
+		"    if (c) goto L_ERR_NEG;\n"
+		"    for (i = 1; i <= n; i++) res *= i;\n"
+		"    r = cria_int(res);\n"
+		"    goto FIM;\n"
+		"L_ERR:\n"
+		"    erro_runtime(\"!\");\n"
+		"L_ERR_NEG:\n"
+		"    printf(\"Erro de Execucao na linha %d: Fatorial nao definido para numeros negativos.\\n\", linha_execucao);\n"
+		"    exit(1);\n"
+		"FIM:\n"
+		"    return r;\n"
+	"}\n"
+	"\n"
+
 
 	/* Funções Relacionais */
 	// Função de ==
@@ -1275,6 +1336,9 @@ string runtime_c =
 // Operadores Compostos
 %token TK_ADD_ASSIGN TK_SUB_ASSIGN TK_MUL_ASSIGN TK_DIV_ASSIGN
 
+// Novos Operadores
+%token TK_EXP TK_FAT
+
 // Símbolo Inicial
 %start PROGRAMA
 
@@ -1285,7 +1349,9 @@ string runtime_c =
 %left '>' '<' TK_GE TK_LE 
 %left '+' '-'
 %left '*' '/'
+%right TK_EXP
 %right TK_NOT
+%left TK_FAT
 %left '[' ']'
 
 %%
@@ -2233,6 +2299,22 @@ E 			: TK_ID
 				$$.traducao = $1.traducao + $3.traducao +
 					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" + 
 					"\t" + $$.label + " = div_dinamica(" + $1.label + ", " + $3.label + ");\n";
+			}
+			| E TK_EXP E
+			{
+				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
+				$$.traducao = $1.traducao + $3.traducao +
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" + 
+					"\t" + $$.label + " = exp_dinamico(" + $1.label + ", " + $3.label + ");\n";
+			}
+			| E TK_FAT
+			{
+				$$.label = gentempcode();
+				$$.linha_token = $1.linha_token;
+				$$.traducao = $1.traducao +
+					"\tlinha_execucao = " + to_string($1.linha_token) + ";\n" + 
+					"\t" + $$.label + " = fat_dinamico(" + $1.label + ");\n";
 			}
 
 	/* Operadores Relacionais	*/ 
