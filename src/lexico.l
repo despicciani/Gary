@@ -158,8 +158,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "break"     { return TK_BREAK;    }
 "continue"  { return TK_CONTINUE; }
 
-    /*        Incremento       */
+    /* Incremento e Decremento      */
 "++"        { return TK_INC; }
+"--"        { return TK_DEC; }
 
     /*     Cast Explícito      */
 "int"       { yylval.label = yytext; return TK_CAST_INT; }

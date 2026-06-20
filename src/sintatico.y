@@ -1201,7 +1201,7 @@ string runtime_c =
 
 // Comandos
 %token TK_IF TK_ELSE TK_ELIF TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
-%token TK_IN TK_TO TK_INC
+%token TK_IN TK_TO TK_INC TK_DEC
 %token TK_BREAK TK_CONTINUE
 
 // Funcao
@@ -1486,18 +1486,6 @@ CMD			: TK_ID '=' E TK_NEWLINE
 			{
 				pilha_tabela_simbolos.pop_back();
 				$$.traducao = $3.traducao; 
-			}
-
-	/* x++ */
-			| TK_ID TK_INC TK_NEWLINE
-			{
-				Simbolo s = buscar_Simbolo($1.label);
-				
-				string temp_um = gentempcode();
-
-				// TAC: x = soma_dinamica(x, 1);
-				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
-							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
 	/* Break */
@@ -2068,6 +2056,62 @@ E 			: TK_ID
 				$$.traducao = $3.traducao + 
 					"\tlinha_execucao = " + to_string($3.linha_token) + ";\n" +
 					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
+			}
+
+			/* Pós-incremento: x++ */
+			| TK_ID TK_INC
+			{
+				Simbolo s = buscar_Simbolo($1.label);
+				string temp_old = gentempcode();
+				string temp_um = gentempcode();
+				
+				$$.label = temp_old; // A expressao passa o valor ANTIGO pra frente
+				$$.linha_token = linha;
+				
+				$$.traducao = "\t" + temp_old + " = " + s.label + ";\n" +
+							  "\t" + temp_um + " = cria_int(1);\n" +
+							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
+			}
+
+			/* Pós-decremento: x-- */
+			| TK_ID TK_DEC
+			{
+				Simbolo s = buscar_Simbolo($1.label);
+				string temp_old = gentempcode();
+				string temp_um = gentempcode();
+				
+				$$.label = temp_old; // A expressao passa o valor ANTIGO pra frente
+				$$.linha_token = linha;
+				
+				$$.traducao = "\t" + temp_old + " = " + s.label + ";\n" +
+							  "\t" + temp_um + " = cria_int(1);\n" +
+							  "\t" + s.label + " = sub_dinamica(" + s.label + ", " + temp_um + ");\n";
+			}
+
+			/* Pré-incremento: ++x */
+			| TK_INC TK_ID
+			{
+				Simbolo s = buscar_Simbolo($2.label);
+				string temp_um = gentempcode();
+				
+				$$.label = s.label; // A expressao passa o valor NOVO pra frente
+				$$.linha_token = linha;
+				
+				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
+							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
+			}
+
+			/* Pré-decremento: --x */
+			| TK_DEC TK_ID
+			{
+				Simbolo s = buscar_Simbolo($2.label);
+				string temp_um = gentempcode();
+				
+				$$.label = s.label; // A expressao passa o valor NOVO pra frente
+				$$.linha_token = linha;
+				
+				$$.traducao = "\t" + temp_um + " = cria_int(1);\n" +
+							  "\t" + s.label + " = sub_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
 			/* Literal de Array / Matriz (ex: [1, 2, 3] ou [[1], [2]]) */
