@@ -233,6 +233,7 @@ string runtime_c =
 	"} Var;\n"
 
 	"void erro_runtime(const char* operacao);\n"
+	"Var cria_int(int v);\n"
 	"\n"
 
 	// Arrays
@@ -249,6 +250,15 @@ string runtime_c =
 	"    return res;\n"
 	"L_ERR:\n"
 	"    erro_runtime(\"Array Size\");\n"
+	"}\n"
+	"\n"
+	"Var get_array_size(Var arr) {\n"
+	"    int c;\n"
+	"    c = (arr.tipo != TIPO_ARRAY);\n"
+	"    if (c) goto L_ERR;\n"
+	"    return cria_int(arr.valor.v_array.tamanho);\n"
+	"L_ERR:\n"
+	"    erro_runtime(\"Tamanho (Nao e um Array)\");\n"
 	"}\n"
 	"\n"
 	"Var get_array(Var arr, Var indice) {\n"
@@ -710,7 +720,7 @@ string runtime_c =
 		"    }\n"
 		"    goto FIM;\n"
 		"L_ERR_EXP:\n"
-		"    printf(\"Erro de Execucao na linha %d: A exponenciacao manual suporta apenas expoentes inteiros.\\n\", linha_execucao);\n"
+		"    printf(\"Erro de Execucao na linha %d: A exponenciacao suporta apenas expoentes inteiros.\\n\", linha_execucao);\n"
 		"    exit(1);\n"
 		"L_ERR_TIPO:\n"
 		"    erro_runtime(\"**\");\n"
@@ -1882,6 +1892,66 @@ CMD			: TK_ID '=' E TK_NEWLINE
 
 										l_fim + ":\n";
 			}
+
+	/* foreach: for i in array: */
+			| TK_FOR TK_ID TK_IN E ':'
+			{
+				for (string iterador : iteradores_ativos) {
+					if (iterador == $2.label) {
+						yyerror("Erro: A variavel '" + $2.label + "' ja esta sendo usada como iteradora em um laco externo.");
+						exit(1);
+					}
+				}
+				iteradores_ativos.push_back($2.label);
+				pilha_tabela_simbolos.push_back(unordered_map<string, Simbolo>());
+				id_escopo++;
+				registrar_variavel($2.label);
+				
+				for_qnt++;
+				for_id_stack.push(for_qnt);
+				int for_id = for_qnt;
+
+				loop_break_stack.push("LBL_FOREACH_FIM_" + to_string(for_id));
+				loop_continue_stack.push("LBL_FOREACH_CONTINUE_" + to_string(for_id));
+			}
+			BLOCO
+			{
+				iteradores_ativos.pop_back();
+				Simbolo s = buscar_Simbolo($2.label);
+				pilha_tabela_simbolos.pop_back();
+
+				string l_continue = loop_continue_stack.top();
+				string l_fim = loop_break_stack.top();
+				loop_continue_stack.pop();
+				loop_break_stack.pop();
+
+				int for_id = for_id_stack.top();
+				for_id_stack.pop();
+
+				string l_inicio = "LBL_FOREACH_INICIO_" + to_string(for_id);
+				string temp_tamanho = gentempcode();
+				string temp_idx = gentempcode();
+				string temp_um = gentempcode();
+				string temp_cond = gentempcode();
+				string cond = gencondcode();
+
+				$$.traducao = $4.traducao +
+							  "\t" + temp_tamanho + " = get_array_size(" + $4.label + ");\n" +
+							  "\t" + temp_idx + " = cria_int(0);\n" +
+							  "\t" + temp_um + " = cria_int(1);\n" +
+							  l_inicio + ":\n" +
+							  "\t" + temp_cond + " = menor_dinamico(" + temp_idx + ", " + temp_tamanho + ");\n" +
+							  "\t" + cond + " = eh_verdadeiro(" + temp_cond + ");\n" +
+							  "\t" + cond + " = !" + cond + ";\n" +
+							  "\tif (" + cond + ") goto " + l_fim + ";\n" +
+							  "\t" + s.label + " = get_array(" + $4.label + ", " + temp_idx + ");\n" +
+							  $7.traducao +
+							  l_continue + ":\n" +
+							  "\t" + temp_idx + " = soma_dinamica(" + temp_idx + ", " + temp_um + ");\n" +
+							  "\tgoto " + l_inicio + ";\n" +
+							  l_fim + ":\n";
+			}
+
 			/* Definição de Função */
 			| TK_DEF TK_ID '('
 			{
