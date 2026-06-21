@@ -37,6 +37,7 @@ typedef struct Var_struct {
 } Var;
 void erro_runtime(const char* operacao);
 Var cria_int(int v);
+void print_dinamico_sem_newline(Var v);
 
 Var cria_array(Var tamanho) {
     Var res;
@@ -160,39 +161,67 @@ L_FIM:
     return 1;
 }
 
-void print_dinamico(Var v) {
+void print_dinamico_sem_newline(Var v) {
     int cond;
+    int i, tam, t1;
+    Var elem;
 L_PRINT_INT:
     cond = (v.tipo != TIPO_INT);
     if (cond) goto L_PRINT_FLOAT;
-    printf("%d\n", v.valor.v_int);
+    printf("%d", v.valor.v_int);
     goto L_PRINT_FIM;
 L_PRINT_FLOAT:
     cond = (v.tipo != TIPO_FLOAT);
     if (cond) goto L_PRINT_CHAR;
-    printf("%f\n", v.valor.v_float);
+    printf("%f", v.valor.v_float);
     goto L_PRINT_FIM;
 L_PRINT_CHAR:
     cond = (v.tipo != TIPO_CHAR);
     if (cond) goto L_PRINT_BOOL;
-    printf("%c\n", v.valor.v_char);
+    printf("%c", v.valor.v_char);
     goto L_PRINT_FIM;
 L_PRINT_BOOL:
     cond = (v.tipo != TIPO_BOOL);
     if (cond) goto L_PRINT_STRING;
     cond = (v.valor.v_bool != 1);
     if (cond) goto L_PRINT_FALSE;
-    printf("true\n");
+    printf("true");
+    goto L_PRINT_FIM;
+L_PRINT_FALSE:
+    printf("false");
     goto L_PRINT_FIM;
 L_PRINT_STRING:
     cond = (v.tipo != TIPO_STRING);
-    if (cond) goto L_PRINT_FIM;
-    printf("%s\n", v.valor.v_string);
+    if (cond) goto L_PRINT_ARRAY;
+    printf("%s", v.valor.v_string);
     goto L_PRINT_FIM;
-L_PRINT_FALSE:
-    printf("false\n");
+L_PRINT_ARRAY:
+    cond = (v.tipo != TIPO_ARRAY);
+    if (cond) goto L_PRINT_FIM;
+    printf("[");
+    tam = v.valor.v_array.tamanho;
+    i = 0;
+L_ARRAY_LOOP:
+    cond = (i < tam);
+    if (!cond) goto L_ARRAY_END;
+    elem = v.valor.v_array.elementos[i];
+    print_dinamico_sem_newline(elem);
+    t1 = tam - 1;
+    cond = (i < t1);
+    if (!cond) goto L_ARRAY_NEXT;
+    printf(", ");
+L_ARRAY_NEXT:
+    i = i + 1;
+    goto L_ARRAY_LOOP;
+L_ARRAY_END:
+    printf("]");
 L_PRINT_FIM:
     return;
+}
+
+void print_dinamico(Var v) {
+    print_dinamico_sem_newline(v);
+    printf("\n");
 }
 
 Var input_dinamico() {
