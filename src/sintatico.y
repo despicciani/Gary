@@ -44,7 +44,7 @@ stack<string> switch_fim_stack;
 stack<string> elif_fim_stack;
 
 // Pilhas para Break e Continue
-stack<string> loop_break_stack;
+vector<string> loop_break_stack;
 stack<string> loop_continue_stack;
 
 // Pilha para erro no for
@@ -1319,7 +1319,7 @@ string runtime_c =
 // Comandos
 %token TK_IF TK_ELSE TK_ELIF TK_WHILE TK_DO TK_FOR TK_SWITCH TK_CASE TK_DEFAULT
 %token TK_IN TK_TO TK_INC TK_DEC
-%token TK_BREAK TK_CONTINUE
+%token TK_BREAK TK_CONTINUE TK_BREAK_ALL
 
 // Funcao
 %token TK_DEF TK_RETURN
@@ -1617,7 +1617,17 @@ CMD			: TK_ID '=' E TK_NEWLINE
 					yyerror("Erro Semantico: 'break' fora de um laco de repeticao.");
 					exit(1);
 				}
-				$$.traducao = "\tgoto " + loop_break_stack.top() + ";\n";
+				$$.traducao = "\tgoto " + loop_break_stack.back() + ";\n";
+			}
+
+	/* Break All */
+			| TK_BREAK_ALL TK_NEWLINE
+			{
+				if (loop_break_stack.empty()) {
+					yyerror("Erro Semantico: 'break all' fora de um laco de repeticao.");
+					exit(1);
+				}
+				$$.traducao = "\tgoto " + loop_break_stack.front() + ";\n";
 			}
 
 	/* Continue */
@@ -1674,7 +1684,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				int while_id = while_qnt;
 
 				/* Break e Continue */
-				loop_break_stack.push("LBL_WHILE_FIM_" + to_string(while_id));
+				loop_break_stack.push_back("LBL_WHILE_FIM_" + to_string(while_id));
 				loop_continue_stack.push("LBL_WHILE_INICIO_" + to_string(while_id));
 			}
 			BLOCO
@@ -1683,9 +1693,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 
 				// Labels necessários
 				string l_inicio = loop_continue_stack.top();
-				string l_fim = loop_break_stack.top();
+				string l_fim = loop_break_stack.back();
 				loop_continue_stack.pop();
-				loop_break_stack.pop();
+				loop_break_stack.pop_back();
 
 				// Condição do while
 				string cond = gencondcode();
@@ -1712,7 +1722,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				int do_id = do_while_qnt;
 
 				/* Break e Continue */
-				loop_break_stack.push("LBL_DO_FIM_" + to_string(do_id));
+				loop_break_stack.push_back("LBL_DO_FIM_" + to_string(do_id));
 				loop_continue_stack.push("LBL_DO_CONTINUE_" + to_string(do_id));
 			}	
 			BLOCO TK_WHILE E TK_NEWLINE
@@ -1726,11 +1736,11 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				// Labels Necessários
 				string l_inicio = "LBL_DO_INICIO_" + to_string(do_id);
 				string l_continue = loop_continue_stack.top();
-				string l_fim = loop_break_stack.top();
+				string l_fim = loop_break_stack.back();
 
 				// Tira das Pilhas
 				loop_continue_stack.pop();
-				loop_break_stack.pop();
+				loop_break_stack.pop_back();
 
 				// Condição Do-While
 				string cond = gencondcode();
@@ -1770,7 +1780,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				int for_id = for_qnt;
 
 				/* Break e Continue usando ID para Label */
-				loop_break_stack.push("LBL_FOR_FIM_" + to_string(for_id));
+				loop_break_stack.push_back("LBL_FOR_FIM_" + to_string(for_id));
 				loop_continue_stack.push("LBL_FOR_CONTINUE_" + to_string(for_id));
 
 				// Linha que pode dar erro de Tipo no for (Linha do cabeçalho)
@@ -1789,9 +1799,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 
 				// Recupera Labels Continue e Break e Retira eles da Pilha
 				string l_continue = loop_continue_stack.top();
-				string l_fim = loop_break_stack.top();
+				string l_fim = loop_break_stack.back();
 				loop_continue_stack.pop();
-				loop_break_stack.pop();
+				loop_break_stack.pop_back();
 
 				// Pega o ID do FOR atual para os labels internos
 				int for_id = for_id_stack.top();
@@ -1911,7 +1921,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				for_id_stack.push(for_qnt);
 				int for_id = for_qnt;
 
-				loop_break_stack.push("LBL_FOREACH_FIM_" + to_string(for_id));
+				loop_break_stack.push_back("LBL_FOREACH_FIM_" + to_string(for_id));
 				loop_continue_stack.push("LBL_FOREACH_CONTINUE_" + to_string(for_id));
 			}
 			BLOCO
@@ -1921,9 +1931,9 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				pilha_tabela_simbolos.pop_back();
 
 				string l_continue = loop_continue_stack.top();
-				string l_fim = loop_break_stack.top();
+				string l_fim = loop_break_stack.back();
 				loop_continue_stack.pop();
-				loop_break_stack.pop();
+				loop_break_stack.pop_back();
 
 				int for_id = for_id_stack.top();
 				for_id_stack.pop();

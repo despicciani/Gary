@@ -163,6 +163,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "to"        { return TK_TO;  }
 
     /*     break e continue    */
+"break"[ \t]+"all"  { return TK_BREAK_ALL; }
 "break"     { return TK_BREAK;    }
 "continue"  { return TK_CONTINUE; }
 
