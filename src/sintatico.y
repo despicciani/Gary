@@ -699,6 +699,8 @@ string runtime_c =
 		"    c = (b.tipo != TIPO_INT);\n"
 		"    if (c) goto L_ERR_EXP;\n"
 		"    exp_int = b.valor.v_int;\n"
+		"    c = (exp_int < 0);\n"
+		"    if (c) goto L_ERR_NEG;\n"
 		"    c = (a.tipo == TIPO_FLOAT);\n"
 		"    if (c) goto L_FLOAT_BASE;\n"
 		"    c = (a.tipo != TIPO_INT);\n"
@@ -719,6 +721,9 @@ string runtime_c =
 		"        r = cria_int(t_int);\n"
 		"    }\n"
 		"    goto FIM;\n"
+		"L_ERR_NEG:\n"
+		"    printf(\"Erro de Execucao na linha %d: A exponenciacao suporta apenas expoentes inteiros positivos.\\n\", linha_execucao);\n"
+		"    exit(1);\n"
 		"L_ERR_EXP:\n"
 		"    printf(\"Erro de Execucao na linha %d: A exponenciacao suporta apenas expoentes inteiros.\\n\", linha_execucao);\n"
 		"    exit(1);\n"
@@ -1360,6 +1365,7 @@ string runtime_c =
 %left '+' '-'
 %left '*' '/'
 %right TK_EXP
+%right UMINUS
 %right TK_NOT
 %left TK_FAT
 %left '[' ']'
@@ -2474,6 +2480,16 @@ E 			: TK_ID
 				$$.label = gentempcode();
 				$$.linha_token = $2.linha_token;
 				$$.traducao = $2.traducao + "\t" + $$.label + " = not_dinamico(" + $2.label + ");\n";
+			}
+
+			| '-' E %prec UMINUS
+			{
+				$$.label = gentempcode();
+				$$.linha_token = $2.linha_token;
+				string var_menos_um = gentempcode();
+				$$.traducao = $2.traducao + 
+					"\t" + var_menos_um + " = cria_int(-1);\n" +
+					"\t" + $$.label + " = mult_dinamica(" + $2.label + ", " + var_menos_um + ");\n";
 			}
 
 	/* Parênteses		*/ 

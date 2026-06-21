@@ -77,7 +77,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
             dedents_pendentes++;
         }
         if (pilha_indentacao.top() != indentacao_atual) {
-            fprintf(stderr, "Nivel de indentacao inconsistente.\n", linha);
+            fprintf(stderr, "Nivel de indentacao inconsistente na linha %d.\n", linha);
             exit(1);
         }
         if (dedents_pendentes > 0) {
@@ -103,7 +103,7 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
             dedents_pendentes++;
         }
         if (pilha_indentacao.top() != indentacao_atual) {
-            fprintf(stderr, "Nivel de indentacao inconsistente.\n", linha);
+            fprintf(stderr, "Nivel de indentacao inconsistente na linha %d.\n", linha);
             exit(1);
         }
         if (dedents_pendentes > 0) {
