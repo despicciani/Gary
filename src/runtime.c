@@ -41,12 +41,17 @@ Var cria_int(int v);
 Var cria_array(Var tamanho) {
     Var res;
     int c, tam;
+    int size_elem, size_total;
+    void* ptr_raw;
     c = (tamanho.tipo != TIPO_INT);
     if (c) goto L_ERR;
     tam = tamanho.valor.v_int;
     res.tipo = TIPO_ARRAY;
     res.valor.v_array.tamanho = tam;
-    res.valor.v_array.elementos = (struct Var_struct*)malloc(tam * sizeof(struct Var_struct));
+    size_elem = sizeof(struct Var_struct);
+    size_total = tam * size_elem;
+    ptr_raw = malloc(size_total);
+    res.valor.v_array.elementos = (struct Var_struct*)ptr_raw;
     return res;
 L_ERR:
     erro_runtime("Array Size");
@@ -490,15 +495,32 @@ L_FLOAT_BASE:
     is_float_base = 1;
     base_float = a.valor.v_float;
 L_CALC:
-    if (is_float_base) {
-        result_float = 1.0;
-        for (i = 0; i < exp_int; i++) result_float *= base_float;
-        r = cria_float(result_float);
-    } else {
-        t_int = 1;
-        for (i = 0; i < exp_int; i++) t_int *= base_int;
-        r = cria_int(t_int);
-    }
+    c = is_float_base;
+    if (!c) goto L_INT_LOOP_INIT;
+    
+    result_float = 1.0;
+    i = 0;
+L_FLOAT_LOOP:
+    c = (i < exp_int);
+    if (!c) goto L_FLOAT_END;
+    result_float = result_float * base_float;
+    i = i + 1;
+    goto L_FLOAT_LOOP;
+L_FLOAT_END:
+    r = cria_float(result_float);
+    goto FIM;
+
+L_INT_LOOP_INIT:
+    t_int = 1;
+    i = 0;
+L_INT_LOOP:
+    c = (i < exp_int);
+    if (!c) goto L_INT_END;
+    t_int = t_int * base_int;
+    i = i + 1;
+    goto L_INT_LOOP;
+L_INT_END:
+    r = cria_int(t_int);
     goto FIM;
 L_ERR_NEG:
     printf("Erro de Execucao na linha %d: A exponenciacao suporta apenas expoentes inteiros positivos.\n", linha_execucao);
@@ -520,7 +542,15 @@ Var fat_dinamico(Var a) {
     n = a.valor.v_int;
     c = (n < 0);
     if (c) goto L_ERR_NEG;
-    for (i = 1; i <= n; i++) res *= i;
+    res = 1;
+    i = 1;
+L_LOOP:
+    c = (i <= n);
+    if (!c) goto L_FIM_FAT;
+    res = res * i;
+    i = i + 1;
+    goto L_LOOP;
+L_FIM_FAT:
     r = cria_int(res);
     goto FIM;
 L_ERR:
