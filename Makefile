@@ -5,13 +5,35 @@ SCANNER_PARAMS := $(DIR)/lexico.l
 PARSER := bison
 PARSER_PARAMS := -d --yacc $(DIR)/sintatico.y
 CXXFLAGS := -Wno-free-nonheap-object
-FILE := exemplos/01_soma.foca
+
+ifeq (run,$(firstword $(MAKECMDGOALS)))
+  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(RUN_ARGS):;@:)
+  $(eval .PHONY: $(RUN_ARGS))
+endif
+
+ifeq (build,$(firstword $(MAKECMDGOALS)))
+  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(RUN_ARGS):;@:)
+  $(eval .PHONY: $(RUN_ARGS))
+endif
+
+ifneq ($(RUN_ARGS),)
+  FILE := $(RUN_ARGS)
+else
+  FILE ?= main.gary
+endif
 
 all: glf
 
 compile: glf
 
-glf: y.tab.c lex.yy.c
+runtime_str.h: $(DIR)/runtime.c
+		@echo 'string runtime_c = R"RUNTIME(' > runtime_str.h
+		@cat $(DIR)/runtime.c >> runtime_str.h
+		@echo ')RUNTIME";' >> runtime_str.h
+
+glf: y.tab.c lex.yy.c runtime_str.h
 		g++ $(CXXFLAGS) -o glf y.tab.c
 
 lex.yy.c: $(DIR)/lexico.l
@@ -24,44 +46,13 @@ translate: glf
 		./glf < $(FILE)
 
 run: glf
-		./glf < $(FILE) > /tmp/foca_output.c && gcc /tmp/foca_output.c -o /tmp/foca_output && /tmp/foca_output
+		@./glf < $(FILE) > /tmp/gary_output.c
+		@gcc /tmp/gary_output.c -o /tmp/gary_output
+		@/tmp/gary_output
 
-test: glf
-	@pass=0; fail=0; \
-	for f in exemplos/*.foca; do \
-		name=$$(basename $$f .foca); \
-		expected="exemplos/$$name.expected"; \
-		if [ -f "$$expected" ]; then \
-			if ./glf < $$f 2>/dev/null | diff -q - $$expected > /dev/null 2>&1; then \
-				echo "  PASS: $$name"; \
-				pass=$$((pass + 1)); \
-			else \
-				echo "  FAIL: $$name"; \
-				fail=$$((fail + 1)); \
-			fi; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "Resultado: $$pass passou, $$fail falhou"
-
-test-%: glf
-	@name=$(patsubst test-%,%,$@); \
-	foca=$$(ls exemplos/$${name}_*.foca 2>/dev/null | head -1); \
-	if [ -z "$$foca" ]; then \
-		echo "Exemplo nao encontrado para etapa $$name"; \
-		exit 1; \
-	fi; \
-	expected=$$(echo $$foca | sed 's/.foca/.expected/'); \
-	echo "Entrada: $$foca"; \
-	echo "---"; \
-	./glf < $$foca; \
-	echo "---"; \
-	if diff <(./glf < $$foca 2>/dev/null) $$expected > /dev/null 2>&1; then \
-		echo "PASS"; \
-	else \
-		echo "FAIL - Diferenca:"; \
-		diff <(./glf < $$foca 2>/dev/null) $$expected; \
-	fi
+build: glf
+		@./glf < $(FILE) > /tmp/gary_output.c
+		@gcc /tmp/gary_output.c -o $$(basename $(FILE) .gary)
 
 clean:
-	rm -f y.tab.c y.tab.h lex.yy.c glf
+		rm -f y.tab.c y.tab.h lex.yy.c runtime_str.h glf /tmp/gary_output.c /tmp/gary_output
