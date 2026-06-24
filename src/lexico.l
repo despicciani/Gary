@@ -76,6 +76,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
             pilha_indentacao.pop();
             dedents_pendentes++;
         }
+        if (pilha_indentacao.top() != indentacao_atual) {
+            fprintf(stderr, "Nivel de indentacao inconsistente na linha %d.\n", linha);
+            exit(1);
+        }
         if (dedents_pendentes > 0) {
             dedents_pendentes--;
             return TK_DEDENT;
@@ -97,6 +101,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
         while (pilha_indentacao.top() > indentacao_atual) {
             pilha_indentacao.pop();
             dedents_pendentes++;
+        }
+        if (pilha_indentacao.top() != indentacao_atual) {
+            fprintf(stderr, "Nivel de indentacao inconsistente na linha %d.\n", linha);
+            exit(1);
         }
         if (dedents_pendentes > 0) {
             dedents_pendentes--;
@@ -130,6 +138,11 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "print"     { return TK_PRINT; }
 "input"     { return TK_INPUT; }
 
+    /*     função     */
+"def"       { return TK_DEF; }
+"return"    { return TK_RETURN; }
+","         { return ','; }
+
     /*         if-elif-else    */
 "if"        { return TK_IF;   }
 "else"      { return TK_ELSE; }
@@ -150,11 +163,13 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "to"        { return TK_TO;  }
 
     /*     break e continue    */
+"break"[ \t]+"all"  { return TK_BREAK_ALL; }
 "break"     { return TK_BREAK;    }
 "continue"  { return TK_CONTINUE; }
 
-    /*        Incremento       */
+    /* Incremento e Decremento      */
 "++"        { return TK_INC; }
+"--"        { return TK_DEC; }
 
     /*     Cast Explícito      */
 "int"       { yylval.label = yytext; return TK_CAST_INT; }
@@ -162,6 +177,12 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "str"       { yylval.label = yytext; return TK_CAST_STR; }
 "bool"      { yylval.label = yytext; return TK_CAST_BOOL; }
 "char"      { yylval.label = yytext; return TK_CAST_CHAR; }
+
+    /* Operadores Compostos */
+"+="                { return TK_ADD_ASSIGN; }
+"-="                { return TK_SUB_ASSIGN; }
+"*="                { return TK_MUL_ASSIGN; }
+"/="                { return TK_DIV_ASSIGN; }
 
     /*  Operadores Lógicos     */
 "and"       { yylval.label = yytext; return TK_AND; }
@@ -187,8 +208,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     /* Operadores Aritméticos  */
 "+"		            { return '+'; }
 "-"		            { return '-'; }
+"**"                { return TK_EXP; }
 "*"		            { return '*'; }
 "/"		            { return '/'; }
+"!!"                { return TK_FAT; }
 
     /* Operadores Relacionais  */
 ">="                { return TK_GE;   } 
@@ -202,7 +225,9 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 "{"                 { chaves_abertas++; return '{'; }
 "}"                 { chaves_abertas--; return '}'; }
 
-    /*       Parênteses        */
+    /* Parênteses e Colchetes */
+"["                 { return '['; }
+"]"                 { return ']'; }
 "("                 { return '('; }
 ")"                 { return ')'; }
 

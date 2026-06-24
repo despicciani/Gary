@@ -39,6 +39,7 @@ exemplos/
 *.yy.c
 *.yy.h
 glf
+runtime_str.h
 
 # Test Files
 saidagary.c 
