@@ -864,10 +864,13 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				variaveis_func_atual.clear();
 				parametros_atuais.clear();
 			}
-			PARAMETROS ')' ':' TK_NEWLINE TK_INDENT LISTA_COMANDOS TK_DEDENT
+			PARAMETROS ')' ':' TK_NEWLINE TK_INDENT 
+			{
+				tabela_funcoes[$2.label] = parametros_atuais.size();
+			}
+			LISTA_COMANDOS TK_DEDENT
 			{
 				string func_name = "f_" + $2.label;
-				tabela_funcoes[$2.label] = parametros_atuais.size();
 				
 				// 1. Gera o protótipo global
 				codigo_headers_funcoes += "Var " + func_name + "(" + $5.traducao + ");\n";
@@ -891,7 +894,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 					if(!is_param) declarations += "\tVar " + v + ";\n";
 				}
 
-				string body = $10.traducao;
+				string body = $11.traducao;
 				body += "\treturn cria_int(0);\n"; // Return de segurança caso o usuário esqueça
 
 				codigo_funcoes += signature + declarations + body + "}\n\n";
