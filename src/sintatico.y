@@ -381,7 +381,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = $3.traducao + "\t" + s.label + " = " + $3.label + ";\n";
 			}
 
-			/* Operadores Compostos para Variáveis */
+	/* Operadores Compostos para Variáveis */
 			| TK_ID TK_ADD_ASSIGN E TK_NEWLINE
 			{
 				// Diferente do '=', aqui nós só buscamos, pois a variável já DEVE existir!
@@ -404,7 +404,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 				$$.traducao = $3.traducao + "\t" + s.label + " = div_dinamica(" + s.label + ", " + $3.label + ");\n";
 			}
 
-			/* Operador composto para divisão em Arrays/Matriz */
+	/* Operador composto para soma em Arrays/Matriz */
 			| E '[' E ']' TK_ADD_ASSIGN E TK_NEWLINE
 			{
 				string temp_val = gentempcode();
@@ -414,7 +414,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
 			}
 
-			/* Operador composto para divisão em Arrays/Matriz */
+	/* Operador composto para subtração em Arrays/Matriz */
 			| E '[' E ']' TK_SUB_ASSIGN E TK_NEWLINE
 			{
 				string temp_val = gentempcode();
@@ -424,7 +424,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
 			}
 
-			/* Operador composto para divisão em Arrays/Matriz */
+	/* Operador composto para multiplicação em Arrays/Matriz */
 			| E '[' E ']' TK_MUL_ASSIGN E TK_NEWLINE
 			{
 				string temp_val = gentempcode();
@@ -434,7 +434,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  "\tset_array(" + $1.label + ", " + $3.label + ", " + temp_val + ");\n";
 			}
 
-			/* Operador composto para divisão em Arrays/Matriz */
+	/* Operador composto para divisão em Arrays/Matriz */
 			| E '[' E ']' TK_DIV_ASSIGN E TK_NEWLINE
 			{
 				string temp_val = gentempcode();
@@ -852,7 +852,7 @@ CMD			: TK_ID '=' E TK_NEWLINE
 							  l_fim + ":\n";
 			}
 
-			/* Definição de Função */
+	/* Definição de Função */
 			| TK_DEF TK_ID '('
 			{
 				// Configura o isolamento de escopo antes de ler o bloco
@@ -1151,7 +1151,7 @@ E 			: TK_ID
 					"\t" + $$.label + " = cast_char(" + $3.label + ");\n";
 			}
 
-			/* Pós-incremento: x++ */
+	/* Pós-incremento: x++ */
 			| TK_ID TK_INC
 			{
 				Simbolo s = buscar_Simbolo($1.label);
@@ -1166,7 +1166,7 @@ E 			: TK_ID
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
-			/* Pós-decremento: x-- */
+	/* Pós-decremento: x-- */
 			| TK_ID TK_DEC
 			{
 				Simbolo s = buscar_Simbolo($1.label);
@@ -1181,7 +1181,7 @@ E 			: TK_ID
 							  "\t" + s.label + " = sub_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
-			/* Pré-incremento: ++x */
+	/* Pré-incremento: ++x */
 			| TK_INC TK_ID
 			{
 				Simbolo s = buscar_Simbolo($2.label);
@@ -1194,7 +1194,7 @@ E 			: TK_ID
 							  "\t" + s.label + " = soma_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
-			/* Pré-decremento: --x */
+	/* Pré-decremento: --x */
 			| TK_DEC TK_ID
 			{
 				Simbolo s = buscar_Simbolo($2.label);
@@ -1207,7 +1207,7 @@ E 			: TK_ID
 							  "\t" + s.label + " = sub_dinamica(" + s.label + ", " + temp_um + ");\n";
 			}
 
-			/* Literal de Array / Matriz (ex: [1, 2, 3] ou [[1], [2]]) */
+	/* Literal de Array / Matriz (ex: [1, 2, 3] ou [[1], [2]]) */
 			| '[' LISTA_VALORES ']'
 			{
 				$$.label = gentempcode();
@@ -1384,7 +1384,7 @@ E 			: TK_ID
 				$$.linha_token = $2.linha_token;
 			}
 
-			/* Chamada de Função como Expressão */
+	/* Chamada de Função como Expressão */
 			| TK_ID '(' ARGUMENTOS ')'
 			{
 				if (tabela_funcoes.count($1.label) == 0) {
