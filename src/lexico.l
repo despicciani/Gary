@@ -58,6 +58,10 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
     }
 %}
 
+<CHECK_INDENT>[ \t]*#.* {
+    /* Ignora a linha de comentario inteira e nao altera a indentacao */
+}
+
 <CHECK_INDENT>[ \t]+ {
     int indentacao_atual = 0;
     for (int i = 0; i < yyleng; i++) {
@@ -126,6 +130,8 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
                 }
 
 [ \t]+          { }
+
+#.*             { /* Ignora comentarios no meio/fim da linha */ }
 
     /*    Variáveis Globais e Locais   */
 "global"    { return TK_GLOBAL; }
