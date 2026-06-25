@@ -14,7 +14,7 @@ bool enter_eof_emitido = false;
 %}
 
 %option noyywrap
-%x CHECK_INDENT
+%x CHECK_INDENT MULTI_COMMENT
 
 DIGITO [0-9]
 
@@ -131,7 +131,12 @@ ID [a-zA-Z_][a-zA-Z0-9_]*
 
 [ \t]+          { }
 
-#.*             { /* Ignora comentarios no meio/fim da linha */ }
+#.*         { /* Ignora comentarios no meio/fim da linha */ }
+
+"/*"                { BEGIN(MULTI_COMMENT); }
+<MULTI_COMMENT>"*/" { BEGIN(INITIAL); }
+<MULTI_COMMENT>\r?\n { linha++; }
+<MULTI_COMMENT>.    { /* Ignora tudo dentro do comentario */ }
 
     /*    Variáveis Globais e Locais   */
 "global"    { return TK_GLOBAL; }
